@@ -1,0 +1,297 @@
+FUNCTION zppm_fm_get_agents_variation.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  TABLES
+*"      ACTOR_TAB STRUCTURE  SWHACTOR
+*"      AC_CONTAINER STRUCTURE  SWCONT
+*"  EXCEPTIONS
+*"      NO_AGENT_FOUND
+*"----------------------------------------------------------------------
+
+
+  INCLUDE <cntain>.
+
+  DATA:
+    ls_variation_wf     TYPE zppm_s_variation_wf,
+    lv_current_step     TYPE mmpur_wf_current_approval_step,
+    lv_total_steps      TYPE mmpur_wf_total_steps,
+    lv_ppm_id           TYPE /rpm/tv_extid,
+    lv_variation_number TYPE qmnum,
+    lv_variation_type   TYPE qmart,
+    lv_wf_path          TYPE zde_apprv_path. "WF_PATH.
+
+  DATA: lr_actions         TYPE RANGE OF zwrkflow_act,
+        lsr_action         LIKE LINE OF lr_actions,
+        lv_container_value TYPE swc_object,
+        lv_ppm_wf_action   TYPE zwrkflow_act,
+        lv_WorkitemId      TYPE sww_wiid,
+        lt_recipients      TYPE zppm_tt_variation_holder.
+  DATA: lt_container              TYPE swrtcont,
+        lv_return_code            TYPE sysubrc,
+        lv_document_id            TYPE so_entryid,
+        lt_attachment_txt_content TYPE  TABLE OF solisti1,
+        lt_message_lines          TYPE TABLE OF swr_messag,
+        lt_message_struct         TYPE TABLE OF swr_mstruc,
+        lv_decision_note          TYPE string,
+        ls_variationhead          TYPE /noveco/var_head,
+        lv_deep_link_url          TYPE tsftext,
+        lv_wfinst_main            TYPE rpm_tv_guid,
+        lv_lastlevelapproval      TYPE boole_d.
+
+  " Always refresh the output tables first
+
+  REFRESH actor_tab.
+
+  " Extract mandatory runtime attributes from the Flexible Workflow macro container
+  swc_get_element ac_container 'VariationNumber'  lv_variation_number.
+  swc_get_element ac_container 'STEPNUMBER'       lv_current_step.
+  swc_get_element ac_container 'PortfolioItem'    lv_ppm_id.
+  swc_get_element ac_container 'WORKFLOW_ACTION'  lv_ppm_wf_action.
+  swc_get_element ac_container 'VARIATION_TYPE'   lv_variation_type .
+  swc_get_element ac_container 'WF_PATH'          lv_wf_path.
+  swc_get_element ac_container 'WorkitemId'       lv_WorkitemId.
+  swc_get_table  ac_container 'DEEP_LINK_URL'     lv_deep_link_url.
+  swc_get_element  ac_container 'WFINST_MAIN'       lv_wfinst_main .
+  swc_get_element  ac_container 'ISLASTLEVELAPPROVAL'       lv_lastlevelapproval.
+
+* read variation header-------------------------------------------------------
+  SELECT * INTO TABLE @DATA(lt_variationhead)
+    FROM /noveco/var_head
+  WHERE qmnum = @lv_variation_number.
+  IF sy-subrc IS INITIAL.
+    ls_variationhead = VALUE #( lt_variationhead[ 1 ] OPTIONAL ).
+*  ELSE.
+*    "run test
+*    " Constructing a 1-row internal table on the fly with custom data
+*    ls_variationhead = VALUE /noveco/var_head(
+*        mandt            = sy-mandt
+*        qmnum            = '000400000094'
+*        qmtxt            = 'Variation for Scope Change'
+*        aennr            = ''
+*        priok            = '1'
+*        var_reason       = 'SCOP'
+*        var_rej_reason   = ''
+*        ernam            = sy-uname
+*        erdat            = sy-datum
+*        date_appr        = sy-datum
+*        date_rej         = '00000000'
+*        aenam            = ''
+*        aedat            = '00000000'
+*        kurst            = 'M'
+*        waers            = 'AUD'
+*        objnr            = 'QN000400000094'
+*        ebeln            = ''
+*        ebelp            = '00000'
+*        vbeln            = ''
+*        pspid            = 'P.000245'
+*        psp_nr           = '00001234'
+*        ref_ext1         = 'EXT-999'
+*        ref_int1         = 'INT-111'
+*        estimated_costs  = '35000.00'
+*        qwrnum           = ''
+*        estimated_rev    = '50000.00'
+*        profit_perc      = '30.00'
+*        probability      = '100.00'
+*        expected_reven   = '50000.00'
+*        expected_fcast   = '50000.00'
+*        expected_budget  = '35000.00'
+*        revenue_updated  = abap_true
+*        budget_updated   = abap_true
+*        fcast_updated    = abap_true
+*        revenue_upd_flg  = 'X'
+*        budget_upd_flg   = 'X'
+*        fcast_upd_flg    = 'X'
+*        salesord_updated = abap_false
+*        salesord_reverse = abap_false
+*        template         = ''
+*        use_date_appr    = abap_true
+*      ).
+  ENDIF.
+
+  "Get the previous approver list based basbaon the tracking table not using the iv_stepnumber
+  IF lv_variation_type = 'Z4'."Internal
+      SELECT * INTO TABLE @DATA(lt_variation_steps)
+      FROM zi_ppm_variation_steps
+      WHERE wfinst_main = @lv_wfinst_main
+        AND ppmitem = @lv_ppm_id
+        AND variationnumber = @lv_variation_number
+      ORDER BY WorkflowSeqVar DESCENDING.
+      IF sy-subrc IS INITIAL.
+        DATA(ls_variation_steps) = lt_variation_steps[ 1 ].
+        lv_current_step  = ls_variation_steps-WorkflowSeqVar.
+      ENDIF.
+    ELSEIF lv_variation_type  = 'Z1' OR lv_variation_type  = 'Z2' OR lv_variation_type  = 'R1'
+      OR lv_variation_type = 'R2'."External
+      SELECT * INTO TABLE @lt_variation_steps
+      FROM zi_ppm_variation_steps
+      WHERE  wfinst_main = @lv_wfinst_main  AND ppmitem = @lv_ppm_id
+        AND variationnumber = @lv_variation_number
+       ORDER BY WorkflowSeq  DESCENDING.
+      IF sy-subrc IS INITIAL.
+        ls_variation_steps = lt_variation_steps[ 1 ].
+        lv_current_step  = ls_variation_steps-WorkflowSeq.
+      ENDIF.
+    ENDIF.
+*  IF lv_current_step IS INITIAL.
+*    IF lv_variation_type = 'Z4'."Internal
+*      SELECT * INTO TABLE @DATA(lt_variation_steps)
+*      FROM zi_ppm_variation_steps
+*      WHERE wfinst_main = @lv_wfinst_main AND ppmitem = @lv_ppm_id AND variationnumber = @lv_variation_number
+*      ORDER BY WorkflowSeqVar DESCENDING.
+*      IF sy-subrc IS INITIAL.
+*        DATA(ls_variation_steps) = lt_variation_steps[ 1 ].
+*        lv_current_step  = ls_variation_steps-WorkflowSeqVar + 10.
+*      ENDIF.
+*    ELSEIF lv_variation_type  = 'Z1' OR lv_variation_type  = 'Z2' OR lv_variation_type  = 'R1'
+*      OR lv_variation_type = 'R2'."External
+*      SELECT * INTO TABLE @lt_variation_steps
+*      FROM zi_ppm_variation_steps
+*      WHERE  wfinst_main = @lv_wfinst_main  AND ppmitem = @lv_ppm_id AND variationnumber = @lv_variation_number
+*       ORDER BY WorkflowSeq  DESCENDING.
+*      IF sy-subrc IS INITIAL.
+*        ls_variation_steps = lt_variation_steps[ 1 ].
+*        lv_current_step  = ls_variation_steps-WorkflowSeq  + 10.
+*      ENDIF.
+*    ENDIF.
+*  ELSE.
+*    IF lv_variation_type = 'Z4'."Internal
+*      SELECT * INTO TABLE @lt_variation_steps
+*      FROM zi_ppm_variation_steps
+*      WHERE  wfinst_main = @lv_wfinst_main AND ppmitem = @lv_ppm_id AND variationnumber = @lv_variation_number
+*           AND WorkflowSeqVar = @lv_current_step
+*      ORDER BY WorkflowSeqVar DESCENDING.
+*      IF sy-subrc IS INITIAL.
+*        ls_variation_steps = lt_variation_steps[ 1 ].
+*        lv_current_step  = ls_variation_steps-WorkflowSeqVar.
+*      ENDIF.
+*    ELSEIF lv_variation_type  = 'Z1' OR lv_variation_type  = 'Z2' OR lv_variation_type  = 'R1'
+*      OR lv_variation_type = 'R2'."External
+*      SELECT * INTO TABLE @lt_variation_steps
+*      FROM zi_ppm_variation_steps
+*      WHERE  wfinst_main = @lv_wfinst_main AND ppmitem = @lv_ppm_id AND variationnumber = @lv_variation_number
+*        AND WorkflowSeq = @lv_current_step
+*       ORDER BY WorkflowSeq  DESCENDING.
+*      IF sy-subrc IS INITIAL.
+*        ls_variation_steps = lt_variation_steps[ 1 ].
+*        lv_current_step  = ls_variation_steps-WorkflowSeq .
+*      ENDIF.
+*    ENDIF.
+*  ENDIF.
+
+  " Defensive Validation Check: Explicitly handle missing data rather than using 'CHECK'
+
+  " Defensive Validation Check
+  IF lv_current_step IS INITIAL OR lv_ppm_id IS INITIAL.
+    RAISE no_agent_found.
+  ENDIF.
+
+  " Modern internal table population using VALUE operator with conditional logic
+  lr_actions = VALUE #(
+    sign   = 'I'
+    option = 'EQ'
+    ( low = COND #( WHEN lv_ppm_wf_action IS NOT INITIAL
+                    THEN lv_ppm_wf_action
+                    ELSE zif_ppm_variation_wf_c=>c_workflow_action-endorser ) )
+
+    " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
+    ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+    ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+    ( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+  ).
+
+  " Read the relevant stakeholders mapped to this specific portfolio item
+  SELECT portfolioitem,
+         counter,
+         positionid,
+         rolename,
+         roleposition,
+         role,
+         roleadditionalresponsible,
+         decpointgovernancerole,
+         workflowaction,
+         workflowsequence,
+         variationsequence
+    FROM zi_ppm_projectroles
+    WHERE portfolioitem = @lv_ppm_id
+      AND workflowaction IN @lr_actions
+      AND positionid IS NOT INITIAL
+    INTO TABLE @DATA(lt_positions).
+  IF sy-subrc <> 0.
+    RAISE no_agent_found.
+  ENDIF.
+  " get : Agent - Fallback When No Agent Found
+  DATA(ls_wf_manager_pos) = VALUE #( lt_positions[ workflowaction = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager  ] OPTIONAL ).
+  DELETE lt_positions WHERE workflowaction = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager.
+  " Determine target positions matching current Fiori execution block sequence
+  DATA(ls_position) = VALUE zi_ppm_projectroles( ).
+  IF lv_wf_path = '01'.     " '01': Internal Path (Column 9)
+    "Internal Path Filter: Include agents
+    "where governance_role IN ('Portfolio Support', 'Phase Progression Endorser 1', 'Phase Progression Endorser 2').
+    "DATA(lt_filtered_orders) = FILTER #( lt_orders WHERE auart = 'OR' ).
+    DELETE lt_positions WHERE variationsequence  IS INITIAL.
+    SORT lt_positions BY variationsequence ASCENDING.
+    ls_position = VALUE #( lt_positions[ variationsequence = lv_current_step ] OPTIONAL ).
+  ELSEIF lv_wf_path = '02'. " '02': External Path (Column 8)
+    DELETE lt_positions WHERE workflowsequence   IS INITIAL.
+    SORT lt_positions BY workflowsequence  ASCENDING.
+    ls_position = VALUE #( lt_positions[ workflowsequence = lv_current_step ] OPTIONAL ).
+  ENDIF.
+  "no agent found
+  IF ls_position IS INITIAL.
+    " Fallback When No Agent Found
+    ls_position = ls_wf_manager_pos .
+  ENDIF.
+  " Validate position find and grab organizational assigned users
+  IF ls_position-positionid IS NOT INITIAL.
+    SELECT userid, emailaddress, fullname
+      FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+      WHERE positionid = @ls_position-positionid
+      INTO TABLE @DATA(lt_holders).
+    IF sy-subrc = 0 AND lt_holders IS NOT INITIAL.
+      " Fill actor table with verified users using inline FOR loop
+      CLEAR actor_tab.
+      LOOP AT lt_holders INTO DATA(ls_holder) WHERE userid IS NOT INITIAL.
+        APPEND VALUE #( otype = 'US' objid = ls_holder-userid ) TO actor_tab.
+        APPEND VALUE #( userid = ls_holder-userid  email = ls_holder-emailaddress fullname =  ls_holder-fullname ) TO  lt_recipients .
+      ENDLOOP.
+
+    ELSE.
+      " For unit test only (Clears the table and adds the single test user)
+*      APPEND VALUE #( otype = 'US' objid = '117001' ) TO actor_tab.
+*      APPEND VALUE #( userid = '117001'  email = 'huy.tran@brisbane.qld.gov.au' fullname =  'huy.tran') TO  lt_recipients .
+      "RAISE no_agent_found.
+    ENDIF.
+  ELSE.
+    RAISE no_agent_found.
+  ENDIF.
+  swc_set_element ac_container 'WORKFLOW_ACTION' ls_position-workflowaction.
+  swc_set_element ac_container 'STEPNUMBER'       lv_current_step.
+  swc_set_element ac_container 'ISLASTLEVELAPPROVAL'    lv_lastlevelapproval.
+*----------------------------------------------------------------------
+  DATA lv_url TYPE string.
+  IF lt_recipients IS NOT INITIAL.
+    DATA(lo_cl_ppm_variation_wf) = NEW zcl_ppm_variation_wf( ).
+    IF lv_deep_link_url IS NOT INITIAL.
+
+      LOOP AT lv_deep_link_url INTO DATA(ls_url).
+        lv_url = lv_url && ls_url-tdline.
+      ENDLOOP.
+    ENDIF.
+    CALL METHOD lo_cl_ppm_variation_wf->sendmail_approval
+      EXPORTING
+        iv_variationnumber      = lv_variation_number              " Notification Number
+        iv_deep_link_url        = lv_url          " URL
+        iv_curr_workflow_action = lv_ppm_wf_action             " Workflow Action
+        it_recipients           = lt_recipients
+        is_variationhead        = ls_variationhead               " EVM Variation List
+        iv_action_event         = zif_ppm_variation_wf_c=>c_action_event-WorkItemCreated
+      EXCEPTIONS
+        no_recipients_found     = 1                " No recipients found
+        OTHERS                  = 2.
+    IF sy-subrc <> 0.
+*           MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*             WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+  ENDIF.
+
+ENDFUNCTION.
