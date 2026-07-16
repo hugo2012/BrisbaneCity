@@ -1,0 +1,152 @@
+  METHOD if_swf_flex_ifs_run_appl_step~after_completion_callback.
+
+    DATA: lv_default_action    TYPE string.
+    DATA: lo_root_component TYPE REF TO if_swf_flex_ifs_inst_block.
+    DATA: lv_agent             TYPE wfsyst-act_agent.
+    DATA: lv_last_step_action  TYPE string.
+    DATA: lv_Decision_WI_Result TYPE swd_lines-returncode,
+          lv_wfinst_main        TYPE rpm_tv_guid.
+
+    DATA: lv_ppm_item  	       TYPE /rpm/tv_extid,
+          lv_variation_number  TYPE qmnum,
+          lv_stepnumber        TYPE zwrkflow_seq1,
+          lv_variation_type    TYPE qmart,
+          lv_status	           TYPE numc5,
+          lv_workflow_action   TYPE zwrkflow_act,
+          lv_govern_role       TYPE zdp_gov_role,
+          lv_holder_summary	   TYPE fincs_long_text_250,
+          lv_processed_by	     TYPE edoc_it_pec_email_address,
+          lv_local_created_by	 TYPE abp_creation_user,
+          lv_workitemid	       TYPE sww_wiid,
+          "lv_decision_wi_result  TYPE swd_retur_ ,
+          lv_lastlevelapproval TYPE boole_d,
+          lv_pmapprover	       TYPE swp_agent,
+          ls_variationhead     TYPE /noveco/var_head,
+          lv_deep_link_url     TYPE tsftext,
+          lv_wf_path           TYPE zde_apprv_path.
+
+    DATA: lo_workitem TYPE REF TO bi_object.
+
+    ev_action = if_swf_flex_ifs_run_appl_step=>c_action_default.
+
+    TEST-SEAM workflow_container.
+       TRY.
+      DATA(lo_workflow_container) = io_context->get_workflow_container( ).
+      lo_workflow_container->get( EXPORTING name = 'Decision_WI_Result'  IMPORTING value = lv_Decision_WI_Result ).
+    CATCH cx_swf_cnt_container.
+           " Handle exception if element is missing
+       ENDTRY.
+    END-TEST-SEAM.
+    DATA(lv_workflowsteptype) = io_current_activity->get_reference_id( ).
+    DATA(lv_execution_results) = io_current_activity->get_execution_results( ).
+    IF lv_workflowsteptype IS NOT INITIAL.
+      TRY.
+          DATA(lv_nodeid) = mo_definition->get_nodeid_via_id( lv_workflowsteptype ).
+
+          IF lv_nodeid = 36." Rework task , when click on re-submit in my inbox
+            IF lv_Decision_WI_Result = zif_ppm_variation_wf_c=>c_decision_outcome_id-approve.
+               lv_Decision_WI_Result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit.
+            ENDIF.
+          ENDIF.
+        CATCH cx_swf_flex_run_def_exception INTO DATA(lx_exception).
+*          RAISE EXCEPTION TYPE cx_swf_flex_run_def_exception
+*            EXPORTING
+*              previous = lx_exception.
+      ENDTRY.
+    ENDIF.
+    IF ( ( iv_default_adhoc_step_id = 'Rework' AND iv_default_action EQ if_swf_flex_component=>c_action_restart )
+      OR iv_default_action EQ if_swf_flex_component=>c_action_cancel OR lv_Decision_WI_Result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit  OR lv_nodeid = 36 )  .
+      TRY.
+          lo_workflow_container->get( EXPORTING name = 'WFINST_MAIN'  IMPORTING value = lv_wfinst_main ).
+*          lv_ppm_item
+          lo_workflow_container->get( EXPORTING name = 'PORTFOLIOITEM'  IMPORTING value = lv_ppm_item ).
+*          lv_variation_number
+          lo_workflow_container->get( EXPORTING name = 'VARIATIONNUMBER'  IMPORTING value = lv_variation_number ).
+*          lv_stepnumber
+          lo_workflow_container->get( EXPORTING name = 'STEPNUMBER'  IMPORTING value = lv_stepnumber  ).
+*          lv_variation_type
+          lo_workflow_container->get( EXPORTING name = 'VARIATION_TYPE'  IMPORTING value = lv_variation_type  ).
+*          lv_workflow_action
+          lo_workflow_container->get( EXPORTING name = 'CURR_WORKFLOW_ACTION'  IMPORTING value = lv_workflow_action  ).
+*          lv_govern_role
+*          lv_holder_summary
+*          lv_processed_by
+*          lv_local_created_by    - DECISION_ACTUAL_AGENT
+          lo_workflow_container->get( EXPORTING name = 'DECISION_ACTUAL_AGENT'  IMPORTING value = lv_local_created_by ).
+*          lv_workitemid    -   lo_Workitem
+          " lo_workflow_container->get( EXPORTING name = '_Workitem'  IMPORTING value = lo_workitem ).
+*          lv_decision_wi_result
+*          lv_lastlevelapproval
+          lo_workflow_container->get( EXPORTING name = 'ISLASTLEVELAPPROVAL'  IMPORTING value = lv_lastlevelapproval  ).
+*          lv_pmapprover
+          lo_workflow_container->get( EXPORTING name = 'PMAPPROVER'  IMPORTING value = lv_pmapprover ).
+*          ls_variationhead
+          lo_workflow_container->get( EXPORTING name = 'VARIATIONHEAD'  IMPORTING value = ls_variationhead  ).
+*          lv_deep_link_url
+*          lv_wfinst_main
+          lo_workflow_container->get( EXPORTING name = 'WF_PATH'  IMPORTING value = lv_wf_path  ).
+          TRY.
+              lv_workitemid = io_context->get_wi_id( ).
+
+            CATCH cx_swf_cnt_container.
+              " Handle exception if element is missing
+          ENDTRY.
+*---------------------------------------------------------------------------------------*
+*---------------------------------------------------------------------------------------*
+*-->In case action result restart workflow is applicable.We need to refresh the container elements
+          IF  iv_default_action EQ if_swf_flex_component=>c_action_restart OR iv_default_action EQ if_swf_flex_component=>c_action_cancel
+            OR lv_Decision_WI_Result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit OR lv_nodeid = 36 .
+            TRY.
+                DATA(lo_cl_ppm_wf) = NEW zcl_ppm_variation_wf( ).
+                DATA: lv_r_workflow_action      TYPE zwrkflow_act,
+                      lv_r_stepnumber           TYPE zwrkflow_seq1,
+                      lv_r_workflow_action_text TYPE char80,
+                      lv_r_governancerole_text  TYPE char80,
+                      lv_r_total_steps          TYPE mmpur_wf_current_approval_step.
+
+                CALL METHOD lo_cl_ppm_wf->update_tracking_steps
+                  EXPORTING
+                    iv_ppm_item             = lv_ppm_item              " Portfolio Item
+                    iv_variation_number     = lv_variation_number              " Notification Number
+                    iv_stepnumber           = lv_stepnumber              " Var WF Sequence
+                    iv_variation_type       = lv_variation_type              " Notification Type
+*                   iv_status               =                  " 5 Character Numeric NUMC
+                    iv_workflow_action      = lv_workflow_action              " Workflow Action
+*                   iv_govern_role          =                  " Governance Role
+*                   iv_holder_summary       =                  " Long Description
+*                   iv_processed_by         =                  " PEC e-Mail Address of Invoice Recipient
+                    iv_local_created_by     = lv_local_created_by             " Created By User
+                    iv_workitemid           = lv_workitemid           " Work item ID
+                    iv_decision_wi_result   = lv_decision_wi_result               " Workflow Definition: Container Expression for Step Result
+                    iv_lastlevelapproval    = lv_lastlevelapproval                " Data element for domain BOOLE: TRUE (='X') and FALSE (=' ')
+                    iv_pmapprover           = lv_pmapprover            " Agent
+                    is_variationhead        = ls_variationhead           " EVM Variation List
+*                   iv_deep_link_url        =                  " URL
+                    iv_wfinst_main          = lv_wfinst_main           " Guid for application objects
+                  IMPORTING
+                    ev_result               = DATA(lv_result)                " Data element for domain BOOLE: TRUE (='X') and FALSE (=' ')
+                  CHANGING
+                    ev_workflow_action      = lv_r_workflow_action              " Workflow Action
+                    ev_stepnumber           = lv_r_stepnumber                 " Var WF Sequence
+                    ev_workflow_action_text = lv_r_workflow_action_text                 " Workflow Action text
+                    ev_governancerole_text  = lv_r_governancerole_text                 " Governance role
+                    ev_total_steps          = lv_r_total_steps                 " Current Approval Step
+                  EXCEPTIONS
+                    save_data_failed        = 1                " Save data failed
+                    OTHERS                  = 2.
+
+              CATCH cx_swf_flex_ifs_run_exception INTO DATA(lx_run_wfl_exception). " Flexible Runtime Exception
+                RAISE EXCEPTION TYPE cx_swf_flex_ifs_run_exception
+                  EXPORTING
+                    previous = lx_run_wfl_exception.
+            ENDTRY.
+          ENDIF.
+        CATCH cx_swf_cnt_cont_access_denied
+              cx_swf_cnt_elem_access_denied
+              cx_swf_cnt_elem_not_found
+              cx_swf_cnt_container.
+      ENDTRY.
+    ENDIF.
+
+
+  ENDMETHOD.
