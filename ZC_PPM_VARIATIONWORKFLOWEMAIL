@@ -1,0 +1,32 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'PPM Varionation worflow email'
+@Metadata.ignorePropagatedAnnotations: true
+@VDM.viewType : #CONSUMPTION
+@ObjectModel.usageType : {
+  serviceQuality: #D,
+  sizeCategory: #L,
+  dataClass: #TRANSACTIONAL
+}
+
+define view entity ZC_PPM_VARIATIONWORKFLOWEMAIL as select from  I_WorkflowTask as _Workflowtask
+ 
+    inner join      I_WorkflowTaskApplObject     as _WorkflowTaskApplObject     on  _WorkflowTaskApplObject.WorkflowTaskInternalID        = _Workflowtask.WorkflowTaskInternalID
+                                                                                and _WorkflowTaskApplObject.WorkflowObjectRole            = '99'
+                                                                                and _WorkflowTaskApplObject.TechnicalWrkflwObjectType   = 'ZCL_PPM_VARIATION_WF'
+                                                                                and _WorkflowTaskApplObject.TechnicalWrkflwObjectCategory = 'CL'
+ 
+{
+  key _Workflowtask.WorkflowTaskInternalID,
+ 
+      cast(substring(_WorkflowTaskApplObject.TechnicalWrkflwObject, 1 , 12 ) as qmnum  )     as VariationNumber,
+      
+      //Creation Time (Casting DEC(21,7) to DEC(15,0))
+      cast(tstmp_to_dats( cast( _Workflowtask.WrkflwTskCreationUTCDateTime as abap.dec(15,0) ), 'UTC', $session.client, 'NULL' ) as sww_lsd ) as VarNoWrkflwTskCreationUTCDate,
+      cast(tstmp_to_tims( cast( _Workflowtask.WrkflwTskCreationUTCDateTime as abap.dec(15,0) ), 'UTC', $session.client, 'NULL' ) as sww_lst ) as VarNoWrkflwTskCreationUTCTime,
+      
+      //Deadline Due Time (Casting DEC(21,7) to DEC(15,0))
+      cast(tstmp_to_dats( cast( _Workflowtask._TaskDueDate.WorkflowTaskDueUTCDateTime as abap.dec(15,0) ), 'UTC', $session.client, 'NULL' ) as sww_led )    as VarNoWrkflwTaskDueUTCDate,
+      cast(tstmp_to_tims( cast( _Workflowtask._TaskDueDate.WorkflowTaskDueUTCDateTime as abap.dec(15,0) ), 'UTC', $session.client, 'NULL' ) as sww_let )    as VarNoWrkflwTaskDueUTCTime
+ 
+}
