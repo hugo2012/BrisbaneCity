@@ -1,0 +1,289 @@
+  METHOD if_swf_flex_ifs_run_appl_step~on_deadline_action_callback.
+    " Local variables
+
+    DATA: lv_default_action    TYPE string.
+    DATA: lo_root_component TYPE REF TO if_swf_flex_ifs_inst_block.
+    DATA: lv_agent             TYPE wfsyst-act_agent.
+    DATA: lv_last_step_action  TYPE string.
+    DATA: lv_Decision_WI_Result TYPE swd_lines-returncode,
+          lv_wfinst_main        TYPE rpm_tv_guid.
+    DATA: lv_mail_address TYPE ad_smtpadr.
+    DATA: lv_addname      TYPE ad_smtpadr.
+    DATA: lv_address      TYPE REF TO cl_cam_address_bcs.
+    DATA lv_emailid TYPE adr6-smtp_addr.
+    DATA: lv_ppm_item  	       TYPE /rpm/tv_extid,
+          lv_variation_number  TYPE qmnum,
+          lv_stepnumber        TYPE zwrkflow_seq1,
+          lv_variation_type    TYPE qmart,
+          lv_status	           TYPE numc5,
+          lv_workflow_action   TYPE zwrkflow_act,
+          lv_govern_role       TYPE zdp_gov_role,
+          lv_holder_summary	   TYPE fincs_long_text_250,
+          lv_processed_by	     TYPE edoc_it_pec_email_address,
+          lv_local_created_by	 TYPE abp_creation_user,
+          lv_workitemid	       TYPE sww_wiid,
+          "lv_decision_wi_result  TYPE swd_retur_ ,
+          lv_lastlevelapproval TYPE boole_d,
+          lv_pmapprover	       TYPE swp_agent,
+          lv_curr_approver     TYPE swp_agent,
+          ls_variationhead     TYPE /noveco/var_head,
+          lv_deep_link_url     TYPE tsftext,
+          lv_wf_path           TYPE zde_apprv_path,
+          lo_bcs_exception     TYPE REF TO cx_bcs,
+          lv_body_html         TYPE string,
+          lv_subject           TYPE string.
+
+    DATA: lo_workitem TYPE REF TO bi_object.
+    DATA:
+      "lo_send_request TYPE REF TO cl_bcs,
+      lo_document TYPE REF TO cl_document_bcs,
+      lo_sender   TYPE REF TO cl_sapuser_bcs.
+     DATA: r_actions        TYPE RANGE OF zwrkflow_act,
+        lsr_action       LIKE LINE OF r_actions.
+
+    " 1. Execute standard/inherited deadline actions if any exist
+    TRY.
+        super->if_swf_flex_ifs_run_appl_step~on_deadline_action_callback(
+          io_context           = io_context
+          io_current_activity  = io_current_activity
+          iv_task_wi_id        = iv_task_wi_id
+          iv_step_id           = iv_step_id
+          iv_deadline_action_id = iv_deadline_action_id
+          io_log_handle        = io_log_handle
+        ).
+      CATCH cx_swf_flex_ifs_run_exception.
+        " Clean catch or log if needed
+    ENDTRY.
+
+
+    TRY.
+        DATA(lo_workflow_container) = io_context->get_workflow_container( ).
+        lo_workflow_container->get( EXPORTING name = 'WF_PATH'  IMPORTING value = lv_wf_path  ).
+*          lv_workflow_action
+        lo_workflow_container->get( EXPORTING name = 'CURR_WORKFLOW_ACTION'  IMPORTING value = lv_workflow_action ).
+        lo_workflow_container->get( EXPORTING name = 'VARIATIONNUMBER'  IMPORTING value = lv_variation_number ).
+*          lv_stepnumber
+        lo_workflow_container->get( EXPORTING name = 'STEPNUMBER'  IMPORTING value = lv_stepnumber  ).
+        lo_workflow_container->get( EXPORTING name = 'WFINST_MAIN'  IMPORTING value = lv_wfinst_main ).
+*          lv_ppm_item
+        lo_workflow_container->get( EXPORTING name = 'PORTFOLIOITEM'  IMPORTING value = lv_ppm_item ).
+*       CURR_APPROVER
+        lo_workflow_container->get( EXPORTING name = 'CURR_APPROVER'  IMPORTING value = lv_curr_approver ).
+      CATCH cx_swf_cnt_container.
+        " Handle exception if element is missing
+    ENDTRY.
+
+
+    " 2. Handle your custom 'ReminderEmail' deadline action
+    IF iv_deadline_action_id = 'ReminderEmail'.
+
+      TRY.
+          "-------------------------------------------------------------
+          " STEP A: Retrieve Email Recipients (Task Agents)
+          "-------------------------------------------------------------
+          " Query standard tables to find active/assigned agents for the step
+         SELECT portfolioitem,
+                 counter,
+                 positionid,
+                 rolename,
+                 roleposition,
+                 role,
+                 roleadditionalresponsible,
+                 decpointgovernancerole,
+                 workflowaction,
+                 workflowsequence,
+                 variationsequence
+            FROM zi_ppm_projectroles
+            WHERE portfolioitem = @lv_ppm_item
+              AND workflowaction IN @r_actions
+              AND positionid IS NOT INITIAL
+            INTO TABLE @DATA(lt_positions).
+          IF sy-subrc <> 0.
+           " RAISE no_agent_next_approver_found.
+            RETURN.
+          ENDIF.
+          IF sy-subrc IS INITIAL.
+            IF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
+              SORT lt_positions BY variationsequence DESCENDING.
+              DATA(ls_positions) = VALUE #( lt_positions[ variationsequence = lv_stepnumber  ] OPTIONAL ).
+              "lv_current_step  = ls_variation_steps-WorkflowSeqVar.
+
+            ELSEIF lv_wf_path  = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+
+              SORT lt_positions BY workflowsequence DESCENDING.
+
+              ls_positions  = VALUE #( lt_positions[ workflowsequence = lv_stepnumber ] OPTIONAL ).
+              "lv_current_step  = ls_variation_steps-WorkflowSeq.
+            ENDIF.
+
+
+            DATA lt_recipients  TYPE zppm_tt_variation_holder .
+            SELECT COUNT( * )
+              FROM I_HCMObject
+              INTO @DATA(lv_pos_match_count)
+              WHERE HCMPlanVersion = @zif_ppm_variation_wf_c=>c_plan_version_active AND
+                    HCMObjectType = @zif_ppm_variation_wf_c=>c_type_position AND
+                    HCMObjectID = @ls_positions-positionid AND
+                    StartDate <= @sy-datum AND
+                    EndDate >= @sy-datum.
+            IF lv_pos_match_count > 0.
+              " Validate position find and grab organizational assigned users
+              IF ls_positions-positionid IS NOT INITIAL.
+                SELECT userid, emailaddress, fullname
+                 FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+                 WHERE positionid = @ls_positions-positionid
+                 INTO TABLE @DATA(lt_holders) UP TO 3 ROWS.
+                IF sy-subrc = 0 AND lt_holders IS NOT INITIAL.
+                  " Fill actor table with verified users using inline FOR loop
+                  " CLEAR actor_tab.
+                  LOOP AT lt_holders INTO DATA(ls_holder) WHERE userid IS NOT INITIAL.
+                    " APPEND VALUE #( otype = 'US' objid = ls_holder-userid ) TO actor_tab.
+                    APPEND VALUE #( userid = ls_holder-userid  email = ls_holder-emailaddress fullname =  ls_holder-fullname ) TO  lt_recipients .
+                  ENDLOOP.
+                ENDIF.
+              ELSE.
+                " RAISE no_agent_found.
+              ENDIF.
+            ELSE.
+              "RAISE no_agent_found.
+            ENDIF.
+          ENDIF.
+
+          " If no active recipient emails are found, exit to avoid empty emails
+          IF lv_curr_approver IS NOT INITIAL.
+
+                DATA(lv_curr_approver_id) = lv_curr_approver+2.
+                 SELECT userid, emailaddress AS email, fullname
+                   FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+                   WHERE userid = @lv_curr_approver_id
+                   INTO TABLE @lt_recipients.
+                 IF sy-subrc IS INITIAL.
+                 ELSE.
+                   RETURN.
+                 ENDIF.
+          ENDIF.
+
+
+          "-------------------------------------------------------------
+          " STEP B: Instantiate and Map Template using CDS Keys
+          "-------------------------------------------------------------
+          " 1. Create the persistent sending request (BCS)
+          DATA(lo_bcs) = cl_bcs=>create_persistent( ).
+
+          " 2. Get instance of your S/4HANA email template
+          DATA(lo_email_api) = cl_smtg_email_api=>get_instance(
+            iv_template_id = 'ZPPM_9000002_VARI_DEADLINE'
+          ).
+
+          " 3. Supply the primary key of your CDS View (WorkflowTaskInternalID)
+          DATA(lt_cds_key) = VALUE if_smtg_email_template=>ty_gt_data_key(
+            ( name  = 'WORKFLOWTASKINTERNALID'
+              value = iv_task_wi_id )
+          ).
+
+          " 3. Explicitly render the HTML Body and Subject from the CDS record
+
+          " If HTML body is empty, try falling back to standard render
+          "IF lv_body_html IS INITIAL.
+          lo_email_api->render(
+            EXPORTING
+              iv_language         = sy-langu
+              iv_language_default = 'E'
+              it_data_key         = lt_cds_key
+            IMPORTING
+              ev_subject          = lv_subject
+              ev_body_html        = lv_body_html
+          ).
+          " ENDIF.
+
+          "-------------------------------------------------------------
+          " STEP C: Configure Sender & Receivers and Send
+          "-------------------------------------------------------------
+          "  2. Convert the rendered HTML string to SOLI table format
+          DATA(lt_soli_body) = cl_bcs_convert=>string_to_soli( lv_body_html ).
+
+          " 3. Create document explicitly specifying 'HTM' (HTML Format)
+          lo_document = cl_document_bcs=>create_document(
+            i_type    = 'HTM'
+            i_subject = CONV #( lv_subject )
+            i_text    = lt_soli_body
+          ).
+          lo_bcs->set_document( lo_document ).
+
+          " 4. Set System User as sender
+          DATA:
+         lv_default_addr TYPE smail_df_sender_addr.
+          TRY.
+              " Call the instance creation method present in your class signature
+              DATA(lo_mail_config) = cl_bcs_mail_system_config=>create_instance( ).
+
+              " Retrieve the default system sender configuration (replaces SOPR query)
+              lo_mail_config->read_default_sender_address(
+                IMPORTING
+                  ev_default_sender_address = lv_default_addr
+              ).
+
+            CATCH cx_root. " Catching configuration fetch failures safely
+          ENDTRY.
+
+          " Fallback: If your system's default sender address is fully qualified (e.g. 'do-not-reply@domain.com')
+          " extract the domain, or fallback to your system id if empty.
+          IF lv_default_addr IS NOT INITIAL.
+            IF lv_default_addr CS '@'.
+              SPLIT lv_default_addr AT '@' INTO DATA(lv_user) DATA(lv_domain).
+            ELSE.
+              lv_domain = lv_default_addr.
+            ENDIF.
+          ENDIF.
+
+          " Construct the clean core sender address layout safely
+          IF lv_domain IS NOT INITIAL.
+            lv_mail_address = |SAP_WFRT@{ lv_domain }|.
+            lv_addname      = 'Workflow System'(025).
+
+            TRY.
+                CALL METHOD cl_cam_address_bcs=>create_internet_address
+                  EXPORTING
+                    i_address_string = lv_mail_address
+                    i_address_name   = lv_addname
+*                   i_incl_sapuser   =
+                  RECEIVING
+                    result           = lv_address.
+              CATCH cx_address_bcs .
+            ENDTRY.
+*          ENDIF.
+          ENDIF.
+*          TRY.
+**    -- Create persistent send request
+*              lo_send_request = cl_bcs=>create_persistent( ).
+*            CATCH cx_bcs INTO lo_bcs_exception.
+*          ENDTRY.
+*    -- Set sender
+*          l_sender = cl_sapuser_bcs=>create( sy-uname ).
+          CALL METHOD lo_bcs->set_sender
+            EXPORTING
+              i_sender = lv_address. "l_sender.
+
+
+          " 2. Add email recipients
+          LOOP AT lt_recipients INTO DATA(lv_recipient_mail).
+            lv_emailid = lv_recipient_mail-email.
+            DATA(lo_recipient) = cl_cam_address_bcs=>create_internet_address( lv_emailid  ).
+            lo_bcs->add_recipient( i_recipient = lo_recipient ).
+          ENDLOOP.
+
+          " 3. Send email to queue
+          lo_bcs->send( ).
+
+          COMMIT WORK AND WAIT.                        "Commit Work
+        CATCH cx_document_bcs.
+        CATCH cx_smtg_email_common.
+          " Handle S/4HANA email template exceptions
+        CATCH cx_send_req_bcs.
+          " Handle BCS mail framework exceptions
+        CATCH cx_address_bcs.
+          " Handle email parsing exceptions
+      ENDTRY.
+
+    ENDIF.
+  ENDMETHOD.
