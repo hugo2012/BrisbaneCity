@@ -1,0 +1,246 @@
+FUNCTION zppm_fm_get_action_next_var.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(IV_VARIATION_NUMBER) TYPE  QMNUM OPTIONAL
+*"     REFERENCE(IV_CURRENT_STEP) TYPE  MMPUR_WF_CURRENT_APPROVAL_STEP
+*"       OPTIONAL
+*"     REFERENCE(IV_PPM_ID) TYPE  /RPM/TV_EXTID OPTIONAL
+*"     REFERENCE(IV_PPM_WF_ACTION) TYPE  ZWRKFLOW_ACT OPTIONAL
+*"     REFERENCE(IV_VARIATION_TYPE) TYPE  QMART OPTIONAL
+*"     REFERENCE(IV_WF_PATH) TYPE  ZDE_APPRV_PATH OPTIONAL
+*"     REFERENCE(IV_WORKITEMID) TYPE  SWW_WIID OPTIONAL
+*"     REFERENCE(IV_WFINST_MAIN) TYPE  RPM_TV_GUID OPTIONAL
+*"  EXPORTING
+*"     REFERENCE(EV_WFINST_MAIN) TYPE  RPM_TV_GUID
+*"     REFERENCE(EV_WF_ACT_NEXT_APPROVER) TYPE  ZWRKFLOW_ACT
+*"     REFERENCE(EV_WF_NEXT_COUNTER) TYPE  CRMT_ITEM_NO
+*"     REFERENCE(EV_STEPNUMBER) TYPE  ZWRKFLOW_SEQ1
+*"     REFERENCE(ES_NEXT_POST_APPR) TYPE  ZEPPM_PROJ_ROLES
+*"     REFERENCE(ES_CURR_STEP_UUID) TYPE  RPM_TV_GUID
+*"  EXCEPTIONS
+*"      NO_AGENT_NEXT_APPROVER_FOUND
+*"----------------------------------------------------------------------
+
+
+
+  DATA:
+    ls_variation_wf     TYPE zppm_s_variation_wf,
+    lv_current_step     TYPE mmpur_wf_current_approval_step,
+    lv_total_steps      TYPE mmpur_wf_total_steps,
+    lv_ppm_id           TYPE /rpm/tv_extid,
+    lv_variation_number TYPE qmnum,
+    lv_variation_type   TYPE qmart,
+    lv_current_counter  TYPE crmt_item_no,
+    lv_wf_path          TYPE zde_apprv_path. "WF_PATH.
+
+  DATA: r_actions        TYPE RANGE OF zwrkflow_act,
+        lsr_action       LIKE LINE OF r_actions,
+        lv_ppm_wf_action TYPE zwrkflow_act.
+
+  " Always refresh the output tables first
+
+  " Extract mandatory runtime attributes from the Flexible Workflow macro container
+  lv_variation_number = iv_variation_number.
+  "lv_current_step =  iv_current_step.
+  lv_ppm_id = iv_ppm_id.
+  lv_ppm_wf_action = iv_ppm_wf_action.
+  lv_variation_type  = iv_variation_type.
+  lv_wf_path = iv_wf_path.
+
+  "Get the previous approver list based on the tracking table
+   SELECT
+     step_uuid,
+     wfinst_main,
+     counter,
+     workitemid,
+     ppmitem,
+     variationnumber,
+     variationtype,
+     status,
+     note,
+     workflowseqvar,
+     workflowseq,
+     workflowaction,
+     prjrolerole,
+     governrole,
+     positionid,
+     message,
+     holdersummary,
+     processedby,
+     localcreatedby,
+     localcreatedat,
+     locallastchangedby,
+     locallastchangedat,
+     lastchangedat
+       INTO TABLE @DATA(lt_variation_steps)
+     FROM zi_ppm_variation_steps
+     WHERE wfinst_main = @iv_wfinst_main
+     "AND ppmitem = @lv_ppm_id
+     AND variationnumber = @lv_variation_number.
+  IF lv_current_step IS INITIAL AND sy-subrc IS INITIAL.
+    IF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
+
+      SORT lt_variation_steps BY WorkflowSeqVar DESCENDING.
+
+      DATA(ls_variation_steps) = lt_variation_steps[ 1 ].
+      lv_current_step  = ls_variation_steps-WorkflowSeqVar + 10.
+      lv_current_counter = ls_variation_steps-counter + 1.
+      IF iv_current_step IS NOT INITIAL.
+        ls_variation_steps = VALUE #( lt_variation_steps[ WorkflowSeqVar = iv_current_step ] OPTIONAL ).
+        IF ls_variation_steps IS NOT INITIAL.
+          lv_current_step  = ls_variation_steps-WorkflowSeqVar + 10.
+          lv_current_counter = ls_variation_steps-counter + 1.
+        ENDIF.
+        " es_curr_step_uuid = ls_variation_steps-step_uuid.
+        es_curr_step_uuid =  VALUE #( lt_variation_steps[ WorkflowSeqVar = lv_current_step ]-step_uuid OPTIONAL ) .
+      ENDIF.
+
+    ELSEIF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+
+      SORT lt_variation_steps BY WorkflowSeq  DESCENDING.
+      ls_variation_steps = lt_variation_steps[ 1 ].
+      lv_current_step  = ls_variation_steps-WorkflowSeq  + 10.
+      lv_current_counter = ls_variation_steps-counter + 1.
+      IF iv_current_step IS NOT INITIAL.
+        ls_variation_steps = VALUE #( lt_variation_steps[ WorkflowSeq  = iv_current_step ] OPTIONAL ).
+        IF ls_variation_steps IS NOT INITIAL.
+          lv_current_step  = ls_variation_steps-WorkflowSeq  + 10.
+          lv_current_counter = ls_variation_steps-counter + 1.
+        ENDIF.
+         es_curr_step_uuid =  VALUE #( lt_variation_steps[ WorkflowSeqVar = lv_current_step ]-step_uuid OPTIONAL ) .
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+
+  " Defensive Validation Check: Explicitly handle missing data rather than using 'CHECK'
+
+  " Defensive Validation Check
+  IF lv_current_step IS INITIAL OR lv_ppm_id IS INITIAL.
+    RAISE no_agent_next_approver_found.
+  ENDIF.
+
+  " Modern internal table population using VALUE operator with conditional logic
+  r_actions = VALUE #(
+    sign   = 'I'
+    option = 'EQ'
+    ( low = COND #( WHEN lv_ppm_wf_action IS NOT INITIAL
+                    THEN lv_ppm_wf_action
+                    ELSE zif_ppm_variation_wf_c=>c_workflow_action-endorser ) )
+
+    " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
+    ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+    ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+    ( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+  ).
+
+  " Read the relevant stakeholders mapped to this specific portfolio item
+  SELECT portfolioitem,
+         counter,
+         positionid,
+         rolename,
+         roleposition,
+         role,
+         roleadditionalresponsible,
+         decpointgovernancerole,
+         workflowaction,
+         workflowsequence,
+         variationsequence
+    FROM zi_ppm_projectroles
+    WHERE portfolioitem = @lv_ppm_id
+      AND workflowaction IN @r_actions
+      AND positionid IS NOT INITIAL
+    INTO TABLE @DATA(lt_positions).
+  IF sy-subrc <> 0.
+    RAISE no_agent_next_approver_found.
+  ENDIF.
+  " get : Agent - Fallback When No Agent Found
+  DATA(ls_wf_manager_pos) = VALUE #( lt_positions[ workflowaction = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager  ] OPTIONAL ).
+  DELETE lt_positions WHERE workflowaction = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager.
+  " Determine target positions matching current Fiori execution block sequence
+  DATA(ls_position) = VALUE zi_ppm_projectroles( ).
+  IF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal.     " '01': Internal Path (Column 9)
+    "Internal Path Filter: Include agents
+    "where governance_role IN ('Portfolio Support', 'Phase Progression Endorser 1', 'Phase Progression Endorser 2').
+    "DATA(lt_filtered_orders) = FILTER #( lt_orders WHERE auart = 'OR' ).
+    DELETE lt_positions WHERE variationsequence  IS INITIAL.
+    SORT lt_positions BY variationsequence ASCENDING.
+    ls_position = VALUE #( lt_positions[ variationsequence = lv_current_step ] OPTIONAL ).
+  ELSEIF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external. " '02': External Path (Column 8)
+    DELETE lt_positions WHERE workflowsequence   IS INITIAL.
+    SORT lt_positions BY workflowsequence  ASCENDING.
+    ls_position = VALUE #( lt_positions[ workflowsequence = lv_current_step ] OPTIONAL ).
+  ENDIF.
+  "no agent found
+  "no agent found
+  IF ls_position IS INITIAL.
+    " Fallback When No Agent Found
+    ls_position = ls_wf_manager_pos .
+  ENDIF.
+  SELECT COUNT( * )
+        FROM I_HCMObject
+        INTO @DATA(lv_pos_match_count)
+        WHERE HCMPlanVersion = @zif_ppm_variation_wf_c=>c_plan_version_active AND
+              HCMObjectType = @zif_ppm_variation_wf_c=>c_type_position AND
+              HCMObjectID = @ls_position-positionid AND
+              StartDate <= @sy-datum AND
+              EndDate >= @sy-datum.
+    IF lv_pos_match_count > 0.
+
+      " Validate position find and grab organizational assigned users
+      IF ls_position-positionid IS NOT INITIAL.
+        SELECT userid, emailaddress
+          FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+          WHERE positionid = @ls_position-positionid
+          INTO TABLE @DATA(lt_holders).
+        IF sy-subrc = 0 AND lt_holders IS NOT INITIAL.
+          " Fill actor table with verified users using inline FOR loop
+          ev_wf_act_next_approver = ls_position-workflowaction.
+          ev_stepnumber           = lv_current_step.
+          ev_wf_next_counter      = lv_current_counter.
+
+          es_next_post_appr  = CORRESPONDING #( BASE ( es_next_post_appr ) ls_position
+                                 MAPPING    ppm_item = PortfolioItem
+                                            zcount = Counter
+                                            position_id = PositionID
+                                            prjrole_name = RoleName
+                                            prjrole_position = RolePosition
+                                            prjrole_role = Role
+                                            prjrole_addlresp = RoleAdditionalResponsible
+                                            des_point_govrole = DecPointGovernanceRole
+                                            workflow_action = WorkflowAction
+                                            workflow_seq = WorkflowSequence
+                                            workflow_seq_var = VariationSequence
+                                          ).
+          ev_wfinst_main = ls_variation_steps-wfinst_main.
+        ELSE.
+          "FOr test purpose only
+          ev_wf_act_next_approver = ls_position-workflowaction.
+          ev_stepnumber           = lv_current_step.
+          ev_wf_next_counter      = lv_current_counter.
+          es_next_post_appr  = CORRESPONDING #( BASE ( es_next_post_appr ) ls_position
+                                 MAPPING    ppm_item = PortfolioItem
+                                            zcount = Counter
+                                            position_id = PositionID
+                                            prjrole_name = RoleName
+                                            prjrole_position = RolePosition
+                                            prjrole_role = Role
+                                            prjrole_addlresp = RoleAdditionalResponsible
+                                            des_point_govrole = DecPointGovernanceRole
+                                            workflow_action = WorkflowAction
+                                            workflow_seq = WorkflowSequence
+                                            workflow_seq_var = VariationSequence
+                                          ).
+          ev_wfinst_main = ls_variation_steps-wfinst_main.
+          "RAISE NO_AGENT_NEXT_APPROVER_FOUND.
+        ENDIF.
+      ELSE.
+        RAISE no_agent_next_approver_found.
+      ENDIF.
+
+    ELSE.
+      RAISE no_agent_next_approver_found.
+    ENDIF.
+
+ENDFUNCTION.
