@@ -1,0 +1,2439 @@
+class ZCL_PPM_VARIATION_WF definition
+  public
+  create public .
+
+public section.
+
+  interfaces BI_OBJECT .
+  interfaces BI_PERSISTENT .
+  interfaces IF_WORKFLOW .
+  interfaces ZIF_PPM_VARIATION_WF .
+
+  data MO_RESTART_EVENT type ref to IF_SWF_EVT_EVENT .
+
+  events SUBMITTED_FOR_APPROVAL
+    exporting
+      value(IV_STEPNUMBER) type MMPUR_WF_CURRENT_APPROVAL_STEP optional
+      value(IV_INITIATOR) type SWP_AGENT optional
+      value(IV_OBJECT_ID) type SWC_ELEM optional
+      value(IV_REQUESTOR) type SWP_AGENT optional
+      value(IV_VARIATIONNUMBER) type QMNUM optional
+      value(IV_DEEP_LINK_URL) type TSFTEXT optional
+      value(IV_VARIATION_TYPE) type QMART optional
+      value(IV_WF_PATH) type ZDE_APPRV_PATH optional
+      value(IV_CURR_WF_STATUS) type CHAR30 optional
+      value(IV_CURR_WORKFLOW_ACTION) type ZWRKFLOW_ACT optional
+      value(IV_PROJECTNAME) type CHAR100 optional
+      value(IV_CURR_APPROVER) type SWP_AGENT optional
+      value(IV_CURR_APPROVER_NAME) type CHAR100 optional
+      value(IV_PMAPPROVER) type SWP_AGENT optional
+      value(IV_DP_STATUS_APPROVER) type SWP_AGENT optional
+      value(IV_BUS_SUPPORT_APPOVER) type SWP_AGENT optional
+      value(IV_INTERESTED_PARTY_APPROVER) type SWP_AGENT optional
+      value(IV_PROJ_FINCON_APPROVER) type SWP_AGENT optional
+      value(IV_PORTFOLIOITEM) type /RPM/TV_EXTID optional
+      value(IV_CURR_WORKFLOW_ACTION_TEXT) type CHAR80 optional
+      value(IV_GOVERNANCEROLE_TEXT) type CHAR80 optional
+      value(IT_VARIATION_HEAD) type /NOVECO/VAR_HEAD optional
+      value(IV_WFINST_MAIN) type RPM_TV_GUID optional
+      value(IV_TOTAL_STEPS) type MMPUR_WF_TOTAL_STEPS optional .
+  events RESTART_WORKFLOW .
+
+  methods START_WORKFLOW
+    importing
+      !IV_STEPNUMBER type MMPUR_WF_CURRENT_APPROVAL_STEP optional
+      !IV_INITIATOR type SWP_AGENT optional
+      !IV_PORTFOLIOITEM type /RPM/TV_EXTID optional
+      !IV_REQUESTOR type SWP_AGENT optional
+      !IV_VARIATIONNUMBER type QMNUM optional
+      !IV_DEEP_LINK_URL type TSFTEXT optional
+      !IV_VARIATION_TYPE type QMART optional
+      !IV_WF_PATH type ZDE_APPRV_PATH optional
+      !IV_CURR_WF_STATUS type CHAR30 optional
+      !IV_CURR_WORKFLOW_ACTION type ZWRKFLOW_ACT optional
+      !IV_PROJECTNAME type PS_POST1 optional
+      !IV_CURR_APPROVER type SWP_AGENT optional
+      !IV_CURR_APPROVER_NAME type CHAR100 optional
+      !IV_PMAPPROVER type SWP_AGENT optional
+      !IV_DP_STATUS_APPROVER type SWP_AGENT optional
+      !IV_BUS_SUPPORT_APPOVER type SWP_AGENT optional
+      !IV_INTERESTED_PARTY_APPROVER type SWP_AGENT optional
+      !IV_PROJ_FINCON_APPROVER type SWP_AGENT optional
+      !IV_CURR_WORKFLOW_ACTION_TEXT type CHAR80 optional
+      !IV_GOVERNANCEROLE_TEXT type CHAR80 optional
+      !IT_VARIATION_HEAD type /NOVECO/VAR_HEAD optional .
+  methods CONSTRUCTOR
+    importing
+      value(IS_LPOR) type SIBFLPOR optional
+      !IV_STEPNUMBER type MMPUR_WF_CURRENT_APPROVAL_STEP optional
+      !IV_INITIATOR type SWP_AGENT optional
+      value(IV_OBJECT_ID) type SWC_ELEM optional
+      !IV_REQUESTOR type SWP_AGENT optional
+      !IV_VARIATIONNUMBER type QMNUM optional
+      !IV_DEEP_LINK_URL type LCM_URL optional
+      !IV_VARIATION_TYPE type QMART optional
+      !IV_WF_PATH type ZDE_APPRV_PATH optional
+      !IV_CURR_WF_STATUS type CHAR30 optional
+      !IV_CURR_WORKFLOW_ACTION type ZWRKFLOW_ACT optional
+      !IV_PROJECTNAME type CHAR100 optional
+      !IV_CURR_APPROVER type SWP_AGENT optional
+      !IV_CURR_APPROVER_NAME type CHAR100 optional
+      !IS_VARIATION_HEAD type /NOVECO/VAR_HEAD optional .
+  methods UPDATE_TRACKING_STEPS
+    importing
+      value(IV_PPM_ITEM) type /RPM/TV_EXTID
+      value(IV_VARIATION_NUMBER) type QMNUM
+      value(IV_STEPNUMBER) type ZWRKFLOW_SEQ1
+      value(IV_VARIATION_TYPE) type QMART
+      !IV_STATUS type NUMC5 optional
+      !IV_WORKFLOW_ACTION type ZWRKFLOW_ACT optional
+      !IV_GOVERN_ROLE type ZDP_GOV_ROLE optional
+      !IV_HOLDER_SUMMARY type FINCS_LONG_TEXT_250 optional
+      !IV_PROCESSED_BY type EDOC_IT_PEC_EMAIL_ADDRESS optional
+      !IV_LOCAL_CREATED_BY type ABP_CREATION_USER optional
+      !IV_WORKITEMID type SWW_WIID optional
+      !IV_DECISION_WI_RESULT type SWD_RETUR_ optional
+      !IV_LASTLEVELAPPROVAL type BOOLE_D optional
+      !IV_PMAPPROVER type SWP_AGENT optional
+      !IV_INTERES_APPROVER type SWP_AGENT optional
+      !IS_VARIATIONHEAD type /NOVECO/VAR_HEAD optional
+      !IV_DEEP_LINK_URL type TSFTEXT optional
+      !IV_WFINST_MAIN type RPM_TV_GUID optional
+      !IV_WF_PATH type ZDE_APPRV_PATH optional
+    exporting
+      !EV_RESULT type BOOLE_D
+    changing
+      !EV_WORKFLOW_ACTION type ZWRKFLOW_ACT optional
+      !EV_STEPNUMBER type ZWRKFLOW_SEQ1 optional
+      !EV_WORKFLOW_ACTION_TEXT type CHAR80 optional
+      !EV_GOVERNANCEROLE_TEXT type CHAR80 optional
+      !EV_TOTAL_STEPS type MMPUR_WF_CURRENT_APPROVAL_STEP optional
+    exceptions
+      SAVE_DATA_FAILED .
+  methods GET_VARIATION_URL
+    importing
+      value(IV_PORTFOLIO_ITEM) type /RPM/TV_EXTID
+    exporting
+      !ET_URL_LINK type TSFTEXT .
+  methods GET_HOLDERS
+    importing
+      value(IV_POSITION_ID) type ZPOS_ID
+    exporting
+      !ET_HOLDERS type ZPPM_TT_VARIATION_HOLDER
+    exceptions
+      NO_HOLDER_FOUND .
+  methods GETPROJECTMANAGERS
+    importing
+      !IV_PPM_ITEM type /RPM/TV_EXTID
+      !IV_GOVERN_ROLE type ZDP_GOV_ROLE optional
+    exporting
+      !ET_ACTOR_TAB type ZPPM_TT_SWHACTOR .
+  methods GETBUSINESSSUPPORT
+    importing
+      !IV_PPM_ITEM type /RPM/TV_EXTID
+      !IV_GOVERN_ROLE type ZDP_GOV_ROLE optional
+    exporting
+      !ET_ACTOR_TAB type ZPPM_TT_SWHACTOR .
+  methods GETACTIONPARTIES
+    importing
+      !IV_PPM_ITEM type /RPM/TV_EXTID
+      !IV_GOVERN_ROLE type ZDP_GOV_ROLE optional
+    exporting
+      !ET_ACTOR_TAB type ZPPM_TT_SWHACTOR .
+  methods GETDPMANAGERS
+    importing
+      !IV_PPM_ITEM type /RPM/TV_EXTID
+      !IV_GOVERN_ROLE type ZDP_GOV_ROLE optional
+    exporting
+      !ET_ACTOR_TAB type ZPPM_TT_SWHACTOR .
+  methods GET_GOVERNANCE_ROLE
+    importing
+      !IV_PPM_ITEM type /RPM/TV_EXTID
+      !IV_GOVERN_ROLE type ZDP_GOV_ROLE
+    exporting
+      !ET_PROJ_ROLES type ZEPPM_TT_PROJ_ROLES .
+  methods SENDMAIL_APPROVAL
+    importing
+      !IV_VARIATIONNUMBER type QMNUM optional
+      !IV_DEEP_LINK_URL type LCM_URL optional
+      !IV_CURR_WORKFLOW_ACTION type ZWRKFLOW_ACT optional
+      !IV_ACTION_EVENT type CHAR20 optional
+      !IT_RECIPIENTS type ZPPM_TT_VARIATION_HOLDER optional
+      !IS_VARIATIONHEAD type /NOVECO/VAR_HEAD optional
+    exceptions
+      NO_RECIPIENTS_FOUND .
+  methods VALIDATE_TRIGGER_WORKFLOW
+    importing
+      !IS_VARIATIONHEAD type /NOVECO/VAR_HEAD optional
+      !IV_WF_PATH type ZDE_APPRV_PATH
+    exporting
+      value(R_RESULT) type BOOLE_D
+    exceptions
+      FAILEDTOTRIGGERWORKFLOW
+      NO_AGENT_FOUND .
+  methods RAISE_SUBMIT_APPROVAL_WORKFLOW
+    importing
+      !IS_EVM_QMEL type /NOVECO/EVM_QMEL optional
+    exporting
+      value(R_RESULT) type BOOLE_D .
+  methods RUN_TEST_WF .
+  methods GENERATE_UUID
+    exporting
+      value(EV_GUID) type RPM_TV_GUID .
+  methods SETFLOWSTATUS
+    importing
+      !IV_WFINST_MAIN type RPM_TV_GUID optional
+      !IV_VARIATION_NUMBER type QMNUM optional
+      !IV_DECISION_WI_RESULT type SWD_RETUR_ optional
+      !IV_WORKFLOW_ACTION type ZWRKFLOW_ACT optional
+      !IV_CURRENT_STEP_UUID type SYSUUID_X16 optional
+      !IV_FINAL_STEP_UUID type SYSUUID_X16 optional
+      !IV_LASTLEVELAPPROVAL type BOOLE_D optional
+      !IV_LAST_CHANGED_BY type SY-UNAME optional
+    exporting
+      !R_RESULT type BOOLE_D
+    exceptions
+      UPDATE_CURR_STAT_STEP_FAILED
+      UPDATE_FINAL_STAT_STEP_FAILED .
+  methods BUILD_NEXT_STEP
+    importing
+      value(IV_VARIATION_NUMBER) type QMNUM optional
+      !IV_CURRENT_STEP type MMPUR_WF_CURRENT_APPROVAL_STEP optional
+      value(IV_PPM_ID) type /RPM/TV_EXTID optional
+      value(IV_PPM_WF_ACTION) type ZWRKFLOW_ACT optional
+      value(IV_VARIATION_TYPE) type QMART optional
+      value(IV_WF_PATH) type ZDE_APPRV_PATH optional
+      value(IV_WORKITEMID) type SWW_WIID optional
+      !IV_CREATED_BY type SY-UNAME optional
+      !IV_WFINST_MAIN type RPM_TV_GUID optional
+    exporting
+      value(EV_WF_ACT_NEXT_APPROVER) type ZWRKFLOW_ACT
+      value(EV_STEPNUMBER) type ZWRKFLOW_SEQ1
+      value(EV_WORKFLOW_ACTION_TEXT) type CHAR80
+      value(EV_GOVERNANCEROLE_TEXT) type CHAR80 .
+  methods READ_NOVECO_EPM_VRES
+    importing
+      !IV_VAR_REAS type NUMC2
+    exporting
+      !EV_VAR_REAS_DESC type CHAR30 .
+  methods READ_NOVECO_EPM_VREJ
+    importing
+      !IV_VAR_REJ_REAS type NUMC2
+    exporting
+      !EV_VAR_REAS_DESC type CHAR30 .
+  methods RESTART_APPROVAL .
+  methods VALID_VARIAT_TYPE_TRIGGER_WF
+    importing
+      value(IV_VARIATION_TYPE) type QMART
+      value(IV_VAR_REASON) type /NOVECO/VAR_REASON
+    exporting
+      value(R_VARIATWFTYPE) type ZDE_APPRV_PATH
+      value(R_RESULT) type BOOLE_D .
+  PROTECTED SECTION.
+private section.
+
+  data MV_OBJECT_ID type MMPUR_KEY .
+  data MS_VARIATION_WF type ZPPM_S_VARIATION_WF .
+  data MS_VARIATION_HEAD type /NOVECO/VAR_HEAD .
+    "DATA mo_restart_event TYPE REF TO if_swf_evt_event .
+  data MS_LPOR type SIBFLPOR .
+ENDCLASS.
+
+
+
+CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->BI_OBJECT~DEFAULT_ATTRIBUTE_VALUE
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE REF TO DATA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD bi_object~default_attribute_value.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->BI_OBJECT~EXECUTE_DEFAULT_METHOD
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD bi_object~execute_default_method.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->BI_OBJECT~RELEASE
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD bi_object~release.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Static Public Method ZCL_PPM_VARIATION_WF=>BI_PERSISTENT~FIND_BY_LPOR
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] LPOR                           TYPE        SIBFLPOR
+* | [<-()] RESULT                         TYPE REF TO BI_PERSISTENT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD bi_persistent~find_by_lpor.
+*   result =  new zcl_ppm_variation_wf( lpor ).
+    DATA:
+      lo_ppm_var_wf_object TYPE REF TO zcl_ppm_variation_wf,
+      lv_object_id         TYPE mmpur_key.
+    lv_object_id  = lpor-instid.
+* create instance of the workflow object
+    CREATE OBJECT lo_ppm_var_wf_object TYPE zcl_ppm_variation_wf
+      EXPORTING
+        is_lpor      = lpor
+        iv_object_id = lv_object_id.
+
+    result = lo_ppm_var_wf_object .
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->BI_PERSISTENT~LPOR
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE        SIBFLPOR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD bi_persistent~lpor.
+    result-catid  = 'CL'.
+    result-typeid = 'ZCL_PPM_VARIATION_WF'.
+    result-instid = mv_object_id.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->BI_PERSISTENT~REFRESH
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD bi_persistent~refresh.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->BUILD_NEXT_STEP
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_VARIATION_NUMBER            TYPE        QMNUM(optional)
+* | [--->] IV_CURRENT_STEP                TYPE        MMPUR_WF_CURRENT_APPROVAL_STEP(optional)
+* | [--->] IV_PPM_ID                      TYPE        /RPM/TV_EXTID(optional)
+* | [--->] IV_PPM_WF_ACTION               TYPE        ZWRKFLOW_ACT(optional)
+* | [--->] IV_VARIATION_TYPE              TYPE        QMART(optional)
+* | [--->] IV_WF_PATH                     TYPE        ZDE_APPRV_PATH(optional)
+* | [--->] IV_WORKITEMID                  TYPE        SWW_WIID(optional)
+* | [--->] IV_CREATED_BY                  TYPE        SY-UNAME(optional)
+* | [--->] IV_WFINST_MAIN                 TYPE        RPM_TV_GUID(optional)
+* | [<---] EV_WF_ACT_NEXT_APPROVER        TYPE        ZWRKFLOW_ACT
+* | [<---] EV_STEPNUMBER                  TYPE        ZWRKFLOW_SEQ1
+* | [<---] EV_WORKFLOW_ACTION_TEXT        TYPE        CHAR80
+* | [<---] EV_GOVERNANCEROLE_TEXT         TYPE        CHAR80
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD build_next_step.
+
+    DATA : ls_next_post_appr TYPE  zeppm_proj_roles,
+           lv_next_counter   TYPE crmt_item_no,
+           lv_wfinst_main    TYPE rpm_tv_guid,
+           lv_step_uuid      TYPE rpm_tv_guid,
+           lv_curr_step_uuid TYPE rpm_tv_guid.
+*  ***------------------------------------------------
+*   get the next approver based on the project role table
+*   then update back to container WORKFLOW_ACTION
+*  ---------------------------------------------------
+    CALL FUNCTION 'ZPPM_FM_GET_ACTION_NEXT_VAR'
+      EXPORTING
+        iv_variation_number          = iv_variation_number
+        iv_current_step              = iv_current_step
+        iv_ppm_id                    = iv_ppm_id
+        iv_ppm_wf_action             = iv_ppm_wf_action
+        iv_variation_type            = iv_variation_type
+        iv_wf_path                   = iv_wf_path
+        iv_workitemid                = iv_workitemid
+        iv_wfinst_main               = iv_wfinst_main
+      IMPORTING
+        ev_wfinst_main               = lv_wfinst_main
+        ev_wf_act_next_approver      = ev_wf_act_next_approver
+        ev_stepnumber                = ev_stepnumber
+        ev_wf_next_counter           = lv_next_counter
+        es_next_post_appr            = ls_next_post_appr
+        es_curr_step_uuid            = lv_curr_step_uuid
+      EXCEPTIONS
+        no_agent_next_approver_found = 1
+        OTHERS                       = 2.
+    IF sy-subrc <> 0.
+*   Implement suitable error handling here
+    ELSE.
+*         Insert new record into table ZPPM_VARIAT_STEP for the next step of approver*********
+      " Declares a variable inline and fills it with the current timestamp (YYYYMMDDHHMMSS)
+      GET TIME STAMP FIELD DATA(lv_current_timestamp).
+      " You can then assign it directly inside your VALUE expression:
+      DATA(lv_local_created_at) = lv_current_timestamp.
+      IF  iv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal.
+        DATA(workflow_seq_var) = ls_next_post_appr-workflow_seq_var.
+      ELSEIF  iv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external."External..
+        "Active
+        DATA(workflow_seq) = ls_next_post_appr-workflow_seq.
+      ENDIF.
+
+      IF iv_current_step IS NOT INITIAL.
+        lv_step_uuid =   lv_curr_step_uuid.
+      ELSE.
+        CALL METHOD me->generate_uuid
+          IMPORTING
+            ev_guid = lv_step_uuid.
+      ENDIF.
+
+      DATA(ls_step) = VALUE zppm_variat_step( step_uuid  = lv_step_uuid
+                              wfinst_main =  iv_wfinst_main
+                              counter = lv_next_counter
+                              wi_id = iv_workitemid
+                              ppm_item = iv_ppm_id
+                              variation_number = iv_variation_number
+                              variation_type = iv_variation_type
+                              workflow_seq_var = workflow_seq_var
+                              workflow_seq = workflow_seq
+                              workflow_action = ls_next_post_appr-workflow_action
+                              prjrole_role = ls_next_post_appr-prjrole_role
+                              govern_role = ls_next_post_appr-des_point_govrole
+                              position_id = ls_next_post_appr-position_id
+                              local_created_by = iv_created_by
+                              local_created_at = lv_local_created_at ).
+
+      MODIFY zppm_variat_step FROM ls_step.
+      IF sy-subrc IS INITIAL.
+        COMMIT WORK AND WAIT.
+      ENDIF.
+*         *************************************************************************************
+
+      IF ev_wf_act_next_approver = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        ev_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser.
+        ev_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser.
+      ELSEIF ev_wf_act_next_approver = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase.
+        ev_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_phase.
+        ev_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-pp_approver.
+      ELSEIF  ev_wf_act_next_approver = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        ev_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_invest.
+        ev_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-inv_approver.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->CONSTRUCTOR
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_LPOR                        TYPE        SIBFLPOR(optional)
+* | [--->] IV_STEPNUMBER                  TYPE        MMPUR_WF_CURRENT_APPROVAL_STEP(optional)
+* | [--->] IV_INITIATOR                   TYPE        SWP_AGENT(optional)
+* | [--->] IV_OBJECT_ID                   TYPE        SWC_ELEM(optional)
+* | [--->] IV_REQUESTOR                   TYPE        SWP_AGENT(optional)
+* | [--->] IV_VARIATIONNUMBER             TYPE        QMNUM(optional)
+* | [--->] IV_DEEP_LINK_URL               TYPE        LCM_URL(optional)
+* | [--->] IV_VARIATION_TYPE              TYPE        QMART(optional)
+* | [--->] IV_WF_PATH                     TYPE        ZDE_APPRV_PATH(optional)
+* | [--->] IV_CURR_WF_STATUS              TYPE        CHAR30(optional)
+* | [--->] IV_CURR_WORKFLOW_ACTION        TYPE        ZWRKFLOW_ACT(optional)
+* | [--->] IV_PROJECTNAME                 TYPE        CHAR100(optional)
+* | [--->] IV_CURR_APPROVER               TYPE        SWP_AGENT(optional)
+* | [--->] IV_CURR_APPROVER_NAME          TYPE        CHAR100(optional)
+* | [--->] IS_VARIATION_HEAD              TYPE        /NOVECO/VAR_HEAD(optional)
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD constructor.
+    mv_object_id  = iv_object_id.
+    ms_lpor-instid    = is_lpor-instid.
+    ms_lpor-catid     = is_lpor-catid.
+
+  """ Restart Event Creation for Edit PO Approval
+  mo_restart_event = cl_swf_evt_event=>get_instance(  im_objcateg = cl_swf_evt_event=>mc_objcateg_cl
+                                                im_objtype  = zif_ppm_variation_wf_c=>gc_workflow_leading_object
+                                                im_event    = zif_ppm_variation_wf_c=>gc_restart_for_appr_event
+                                                im_objkey   = mv_object_id ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GENERATE_UUID
+* +-------------------------------------------------------------------------------------------------+
+* | [<---] EV_GUID                        TYPE        RPM_TV_GUID
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD generate_uuid.
+    DATA: lv_ppm_guid TYPE rpm_tv_guid. " <-- Technically RAW 16 bytes
+    TRY.
+        " Generates the 16-byte raw string immediately
+        lv_ppm_guid = cl_system_uuid=>create_uuid_x16_static( ).
+        ev_guid = COND #( WHEN lv_ppm_guid IS NOT INITIAL THEN lv_ppm_guid  ).
+      CATCH cx_uuid_error.
+        " Fallback
+    ENDTRY.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GETACTIONPARTIES
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PPM_ITEM                    TYPE        /RPM/TV_EXTID
+* | [--->] IV_GOVERN_ROLE                 TYPE        ZDP_GOV_ROLE(optional)
+* | [<---] ET_ACTOR_TAB                   TYPE        ZPPM_TT_SWHACTOR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD getactionparties.
+    DATA(lo_clssobj) = NEW zcl_ppm_variation_wf( ).
+    CALL METHOD lo_clssobj->get_governance_role
+      EXPORTING
+        iv_ppm_item    = iv_ppm_item               " Business Object ID
+        iv_govern_role = iv_govern_role               " Governance Role
+      IMPORTING
+        et_proj_roles  = DATA(lt_proj_role).                " Maintain Project Roles for Portfolio Item
+    IF lt_proj_role IS NOT INITIAL.
+      DATA(ls_proj_role) = VALUE #( lt_proj_role[ workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-interested ] OPTIONAL ).
+
+      SELECT COUNT( * )
+       FROM I_HCMObject
+       INTO @DATA(lv_pos_match_count)
+       WHERE HCMPlanVersion = @zif_ppm_variation_wf_c=>c_plan_version_active AND
+             HCMObjectType = @zif_ppm_variation_wf_c=>c_type_position AND
+             HCMObjectID = @ls_proj_role-position_id AND
+             StartDate <= @sy-datum AND
+             EndDate >= @sy-datum.
+      IF lv_pos_match_count > 0.
+        CALL METHOD lo_clssobj->get_holders
+          EXPORTING
+            iv_position_id  = ls_proj_role-position_id                " Org.Position ID
+          IMPORTING
+            et_holders      = DATA(lt_holders)                " Variation holder
+          EXCEPTIONS
+            no_holder_found = 1                " No holder found
+            OTHERS          = 2.
+        IF sy-subrc IS INITIAL.
+          " Fill actor table with verified users
+          LOOP AT lt_holders INTO DATA(ls_holder) WHERE userid IS NOT INITIAL.
+            APPEND VALUE #( otype = 'US' objid = ls_holder-userid ) TO et_actor_tab.
+          ENDLOOP.
+        ENDIF.
+      ELSE.
+        "MESSAGE i010(zppm_var) WITH ls_proj_role-position_id  .
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GETBUSINESSSUPPORT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PPM_ITEM                    TYPE        /RPM/TV_EXTID
+* | [--->] IV_GOVERN_ROLE                 TYPE        ZDP_GOV_ROLE(optional)
+* | [<---] ET_ACTOR_TAB                   TYPE        ZPPM_TT_SWHACTOR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD getbusinesssupport.
+    DATA(lo_clssobj) = NEW zcl_ppm_variation_wf( ).
+    CALL METHOD lo_clssobj->get_governance_role
+      EXPORTING
+        iv_ppm_item    = iv_ppm_item               " Business Object ID
+        iv_govern_role = iv_govern_role               " Governance Role
+      IMPORTING
+        et_proj_roles  = DATA(lt_proj_role).                " Maintain Project Roles for Portfolio Item
+    IF lt_proj_role IS NOT INITIAL.
+      DATA(ls_proj_role) = VALUE #( lt_proj_role[ prjrole_role = 'BUS_SUPPORT' workflow_action = '' ] OPTIONAL ).
+      SELECT COUNT( * )
+        FROM I_HCMObject
+        INTO @DATA(lv_pos_match_count)
+        WHERE HCMPlanVersion = @zif_ppm_variation_wf_c=>c_plan_version_active AND
+              HCMObjectType = @zif_ppm_variation_wf_c=>c_type_position AND
+              HCMObjectID = @ls_proj_role-position_id AND
+              StartDate <= @sy-datum AND
+              EndDate >= @sy-datum.
+      IF lv_pos_match_count > 0.
+         CALL METHOD lo_clssobj->get_holders
+             EXPORTING
+               iv_position_id  = ls_proj_role-position_id                " Org.Position ID
+             IMPORTING
+               et_holders      = DATA(lt_holders)                " Variation holder
+             EXCEPTIONS
+               no_holder_found = 1                " No holder found
+               OTHERS          = 2.
+           IF sy-subrc IS INITIAL.
+             " Fill actor table with verified users
+             LOOP AT lt_holders INTO DATA(ls_holder) WHERE userid IS NOT INITIAL.
+               APPEND VALUE #( otype = 'US' objid = ls_holder-userid ) TO et_actor_tab.
+             ENDLOOP.
+           ENDIF.
+       ELSE.
+           MESSAGE i009(zppm_var) WITH ls_proj_role-position_id  .
+       ENDIF.
+
+    ENDIF.
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GETDPMANAGERS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PPM_ITEM                    TYPE        /RPM/TV_EXTID
+* | [--->] IV_GOVERN_ROLE                 TYPE        ZDP_GOV_ROLE(optional)
+* | [<---] ET_ACTOR_TAB                   TYPE        ZPPM_TT_SWHACTOR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD getdpmanagers.
+    DATA(lo_clssobj) = NEW zcl_ppm_variation_wf( ).
+    CALL METHOD lo_clssobj->get_governance_role
+      EXPORTING
+        iv_ppm_item    = iv_ppm_item               " Business Object ID
+        iv_govern_role = iv_govern_role               " Governance Role
+      IMPORTING
+        et_proj_roles  = DATA(lt_proj_role).                " Maintain Project Roles for Portfolio Item
+    IF lt_proj_role IS NOT INITIAL.
+      DATA(ls_proj_role) = VALUE #( lt_proj_role[ workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager ] OPTIONAL ).
+      SELECT COUNT( * )
+        FROM I_HCMObject
+        INTO @DATA(lv_pos_match_count)
+        WHERE HCMPlanVersion = @zif_ppm_variation_wf_c=>c_plan_version_active AND
+              HCMObjectType = @zif_ppm_variation_wf_c=>c_type_position AND
+              HCMObjectID = @ls_proj_role-position_id AND
+              StartDate <= @sy-datum AND
+              EndDate >= @sy-datum.
+      IF lv_pos_match_count > 0.
+        CALL METHOD lo_clssobj->get_holders
+        EXPORTING
+          iv_position_id  = ls_proj_role-position_id                " Org.Position ID
+        IMPORTING
+          et_holders      = DATA(lt_holders)                " Variation holder
+        EXCEPTIONS
+          no_holder_found = 1                " No holder found
+          OTHERS          = 2.
+         IF sy-subrc IS INITIAL.
+           " Fill actor table with verified users
+           LOOP AT lt_holders INTO DATA(ls_holder) WHERE userid IS NOT INITIAL.
+             APPEND VALUE #( otype = 'US' objid = ls_holder-userid ) TO et_actor_tab.
+           ENDLOOP.
+         ENDIF.
+      ELSE.
+           MESSAGE e008(zppm_var) WITH ls_proj_role-position_id  .
+      ENDIF.
+
+    ENDIF.
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GETPROJECTMANAGERS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PPM_ITEM                    TYPE        /RPM/TV_EXTID
+* | [--->] IV_GOVERN_ROLE                 TYPE        ZDP_GOV_ROLE(optional)
+* | [<---] ET_ACTOR_TAB                   TYPE        ZPPM_TT_SWHACTOR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD getprojectmanagers.
+    DATA(lo_clssobj) = NEW zcl_ppm_variation_wf( ).
+    CALL METHOD lo_clssobj->get_governance_role
+      EXPORTING
+        iv_ppm_item    = iv_ppm_item               " Business Object ID
+        iv_govern_role = iv_govern_role               " Governance Role
+      IMPORTING
+        et_proj_roles  = DATA(lt_proj_role).                " Maintain Project Roles for Portfolio Item
+    IF lt_proj_role IS NOT INITIAL.
+      DATA(ls_proj_role) = VALUE #( lt_proj_role[ workflow_action =  zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager ] OPTIONAL ).
+
+      SELECT COUNT( * )
+        FROM I_HCMObject
+        INTO @DATA(lv_pos_match_count)
+        WHERE HCMPlanVersion = @zif_ppm_variation_wf_c=>c_plan_version_active AND
+              HCMObjectType = @zif_ppm_variation_wf_c=>c_type_position AND
+              HCMObjectID = @ls_proj_role-position_id AND
+              StartDate <= @sy-datum AND
+              EndDate >= @sy-datum.
+      IF lv_pos_match_count > 0.
+        CALL METHOD lo_clssobj->get_holders
+            EXPORTING
+              iv_position_id  = ls_proj_role-position_id                " Org.Position ID
+            IMPORTING
+              et_holders      = DATA(lt_holders)                " Variation holder
+            EXCEPTIONS
+              no_holder_found = 1                " No holder found
+              OTHERS          = 2.
+          IF sy-subrc IS INITIAL.
+            " Fill actor table with verified users
+            LOOP AT lt_holders INTO DATA(ls_holder) WHERE userid IS NOT INITIAL.
+              APPEND VALUE #( otype = 'US' objid = ls_holder-userid ) TO et_actor_tab.
+            ENDLOOP.
+          ENDIF.
+      ELSE.
+        MESSAGE e007(zppm_var) WITH ls_proj_role-position_id  .
+      ENDIF.
+
+    ENDIF.
+
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GET_GOVERNANCE_ROLE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PPM_ITEM                    TYPE        /RPM/TV_EXTID
+* | [--->] IV_GOVERN_ROLE                 TYPE        ZDP_GOV_ROLE
+* | [<---] ET_PROJ_ROLES                  TYPE        ZEPPM_TT_PROJ_ROLES
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_governance_role.
+
+    SELECT portfolioitem,
+             counter,
+             positionid,
+             rolename,
+             roleposition,
+             role,
+             roleadditionalresponsible,
+             decpointgovernancerole,
+             workflowaction,
+             workflowsequence,
+             variationsequence
+       FROM zi_ppm_projectroles
+        WHERE portfolioitem = @iv_ppm_item AND
+           "   decpointgovernancerole = @iv_govern_role AND
+              positionid IS NOT INITIAL
+        INTO TABLE @DATA(lt_positions).
+    IF sy-subrc IS INITIAL.
+
+      et_proj_roles = CORRESPONDING zeppm_tt_proj_roles( lt_positions MAPPING
+                                                ppm_item = portfolioitem
+                                                zcount = counter
+                                                position_id = positionid
+                                                prjrole_name = rolename
+                                                prjrole_position = roleposition
+                                                prjrole_role = role
+                                                prjrole_addlresp = roleadditionalresponsible
+                                                des_point_govrole = decpointgovernancerole
+                                                workflow_action = workflowaction
+                                                workflow_seq = workflowsequence
+                                                workflow_seq_var = variationsequence  ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GET_HOLDERS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_POSITION_ID                 TYPE        ZPOS_ID
+* | [<---] ET_HOLDERS                     TYPE        ZPPM_TT_VARIATION_HOLDER
+* | [EXC!] NO_HOLDER_FOUND
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_holders.
+    " Validate position find and grab organizational assigned users
+    IF iv_position_id IS NOT INITIAL.
+      SELECT userid, emailaddress, fullname
+      FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+      WHERE positionid = @iv_position_id
+      INTO TABLE @DATA(lt_holders).
+      IF sy-subrc = 0 .
+        et_holders = CORRESPONDING zppm_tt_variation_holder( lt_holders MAPPING userid = userid email = emailaddress fullname = fullname ).
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->GET_VARIATION_URL
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PORTFOLIO_ITEM              TYPE        /RPM/TV_EXTID
+* | [<---] ET_URL_LINK                    TYPE        TSFTEXT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_variation_url.
+
+    DATA lt_url    TYPE tsftext.
+    DATA lv_webgui_base_url TYPE string.
+    DATA: lv_part1 TYPE char80,
+          lv_part2 TYPE char80.
+    DATA:  lv_location TYPE string.
+
+       cl_http_server=>get_location(
+         EXPORTING
+           protocol = 'HTTPS'
+         IMPORTING
+           host     = lv_location " Returns something like "sap-server.domain.com:44300"
+       ).
+       IF lv_location IS NOT INITIAL.
+         DATA(lv_transaction_params) = |&~transaction=*ZPPM_NOVECO_EVM%20P_PROJ={ iv_portfolio_item }#|.
+         lv_webgui_base_url  = |https://{ lv_location }/sap/bc/gui/sap/its/webgui/|
+               && |?sap-client={ sy-mandt }|
+               && |{ lv_transaction_params }|.
+       ENDIF.
+
+    " Split the string at the question mark
+    SPLIT lv_webgui_base_url  AT '?' INTO lv_part1 lv_part2.
+
+    " Add the question mark back to the end of the base URL path
+    IF lv_part1 IS NOT INITIAL.
+      lv_part1 = lv_part1 && '?'.
+    ENDIF.
+
+    " 4. Append to your internal text table safely
+    APPEND VALUE #( tdformat = '' tdline = CONV #( lv_part1 ) ) TO lt_url.
+    APPEND VALUE #( tdformat = '' tdline = CONV #( lv_part2 ) ) TO lt_url.
+    et_url_link = COND #( WHEN lt_url IS NOT INITIAL THEN lt_url ).
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->RAISE_SUBMIT_APPROVAL_WORKFLOW
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_EVM_QMEL                    TYPE        /NOVECO/EVM_QMEL(optional)
+* | [<---] R_RESULT                       TYPE        BOOLE_D
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD raise_submit_approval_workflow.
+
+    "DATA(lo_cl_ppm_wf) = NEW zcl_ppm_variation_wf( ).
+    DATA lt_url    TYPE tsftext.
+    DATA lv_webgui_base_url TYPE string.
+    DATA: lv_initiator   TYPE swp_agent,
+          lv_requestor   TYPE swp_agent,
+          lv_inter_party TYPE swp_agent,
+          lv_pm_manager  TYPE swp_agent.
+    DATA lt_var_head TYPE zppm_tt_evm_qmel.
+    DATA lv_pspid TYPE /rpm/tv_extid.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ABPSN_OUTPUT'
+      EXPORTING
+        input         = is_evm_qmel-pspid
+    IMPORTING
+      OUTPUT        = lv_pspid
+              .
+
+*    Get variation URL link
+
+    CALL METHOD me->get_variation_url
+      EXPORTING
+        iv_portfolio_item = lv_pspid
+      IMPORTING
+        et_url_link       = lt_url.
+
+    " Constructing a 1-row internal table on the fly with custom data
+   " APPEND is_evm_qmel TO lt_var_head.
+    "DATA(ls_variationhead) = VALUE #( it_variation_head[ 1 ] OPTIONAL ).
+    DATA ls_variation_head  TYPE /noveco/var_head .
+
+    ls_variation_head  = CORRESPONDING #( is_evm_qmel  ).
+    " PM Manager
+    CALL METHOD me->getprojectmanagers
+      EXPORTING
+        iv_ppm_item    = lv_pspid       " Business Object ID
+        iv_govern_role = zif_ppm_variation_wf_c=>c_governance_role-proj_mngr              " Governance Role
+      IMPORTING
+        et_actor_tab   = DATA(lt_wf_manager). " Governance Role
+    IF lt_wf_manager IS NOT INITIAL.
+      lv_pm_manager = lt_wf_manager[ 1 ]-otype && lt_wf_manager[ 1 ]-objid.
+    ENDIF.
+    " " Interested party manager
+    CALL METHOD me->getactionparties
+      EXPORTING
+        iv_ppm_item    = lv_pspid       " Business Object ID
+        iv_govern_role = zif_ppm_variation_wf_c=>c_governance_role-interested_party     " Governance Role
+      IMPORTING
+        et_actor_tab   = DATA(lt_wf_inter_party). " Governance Role
+    IF lt_wf_inter_party IS NOT INITIAL.
+      lv_inter_party = lt_wf_inter_party[ 1 ]-otype && lt_wf_inter_party[ 1 ]-objid.
+    ENDIF.
+
+    lv_initiator = 'US' && sy-uname.
+    lv_requestor = 'US' && sy-uname.
+
+     CALL METHOD me->valid_variat_type_trigger_wf
+        EXPORTING
+          iv_variation_type =     is_evm_qmel-qmart
+          iv_var_reason     =     is_evm_qmel-var_reason
+        IMPORTING
+          r_result          =     DATA(lv_varitype_trigger)
+          r_variatwftype    =     DATA(lv_variatwftype)
+        .
+
+   IF lv_varitype_trigger = abap_true.
+      CALL METHOD me->start_workflow
+       EXPORTING
+         iv_stepnumber                = '020'                 " Current Approval Step
+         iv_initiator                 = lv_initiator                " Agent
+         iv_portfolioitem             = lv_pspid             " Element
+         iv_requestor                 = lv_requestor                " Agent
+         iv_variationnumber           = is_evm_qmel-qmnum                " Notification Number
+         iv_deep_link_url             = lt_url              " URL
+         iv_variation_type            = is_evm_qmel-qmart              " Notification Type
+         iv_wf_path                   = lv_variatwftype               " Approval path
+         iv_curr_wf_status            = ''              " Current workflow status
+         iv_curr_workflow_action      = zif_ppm_variation_wf_c=>c_workflow_action-endorser " Workflow Action
+         iv_projectname               = is_evm_qmel-post1    " Project name
+         iv_curr_approver             = ''               " Agent
+         iv_curr_approver_name        = ''               " Current approver name
+         iv_pmapprover                = lv_pm_manager      " PM Approver
+         iv_dp_status_approver        = ''               " DP status manager(WF manager)
+         iv_bus_support_appover       = ''                " Bus support manager
+         iv_interested_party_approver = lv_inter_party               " Interested party manager
+         iv_proj_fincon_approver      = ''                " Proj Fincon approver
+         iv_curr_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser
+         iv_governancerole_text       = zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser
+         it_variation_head            = ls_variation_head .
+   ELSE.
+     MESSAGE e012(zppm_var) WITH is_evm_qmel-qmart.
+   ENDIF.
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->RUN_TEST_WF
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD run_test_wf.
+
+*    DATA(lo_cl_wf) = new zcl_ppm_variation_wf( ).
+*    "DATA lt_url  TYPE TSFTEXT .
+*    "APPEND VALUE #( TDFORMAT = '' TDLINE = 'https://s4hana-dev.sappce.brisbane.qld.gov.au/sap/bc/gui/sap/its/webgui?' ) to lt_url.
+*    "APPEND VALUE #( TDFORMAT = '' TDLINE = '~transaction=*ZOPEN_EVM_URL%20P_PROJ=P.400536#' ) to lt_url.
+*
+*   " DATA(lo_cl_wf) = NEW zcl_ppm_variation_wf( ).
+*    DATA lt_url    TYPE tsftext.
+*    DATA lv_webgui_base_url TYPE string.
+*
+*  " 1. Dynamically retrieve the full base WebGUI URL of the current system landscape
+*  cl_its_runtime=>get_url(
+*    IMPORTING
+*      out_abs_url = lv_webgui_base_url " E.g., 'https://s4hana-dev.sappce.brisbane.qld.gov.au/sap/bc/gui/sap/its/webgui'
+*  ).
+*
+*" 2. Append standard question mark indicator if it's missing from the returned engine URL
+*   " Correct ABAP syntax to check if '?' does NOT exist in the string
+*    IF NOT lv_webgui_base_url CS '?'.
+*      lv_webgui_base_url = lv_webgui_base_url && '?'.
+*    ENDIF.
+*
+*    " 3. Append your parameters dynamically using modern string templates
+*    DATA(lv_transaction_params) = |~transaction=*ZOPEN_EVM_URL%20P_PROJ=P.400536#|.
+*
+*    " 4. Append to your internal text table safely
+*    APPEND VALUE #( tdformat = '' tdline = CONV #( lv_webgui_base_url ) ) TO lt_url.
+*    APPEND VALUE #( tdformat = '' tdline = CONV #( lv_transaction_params ) ) TO lt_url.
+*
+*    DATA lt_var_head TYPE ZPPM_TT_EVM_QMEL.
+*
+*    " Constructing a 1-row internal table on the fly with custom data
+*    DATA(lt_variation_head) = VALUE zppm_tt_evm_qmel(
+*      ( qmart            = 'Z4'
+*        kalnr            = '0000001234'
+*        qmdat            = sy-datum
+*        update_type      = 'U'
+*        status           = 'I0002'
+*        status_code      = 'APPR'
+*        status_desc      = 'Approved'
+*        user_status      = 'E0001'
+*        user_status_code = 'ACTV'
+*        user_status_desc = 'Active'
+*        stsma            = 'ZQM_STAT'
+*        post1            = 'Project Variation Alpha'
+*        bukrs            = '1000'
+*        created_by       = sy-uname
+*        profit           = '15000.00'
+*        rev_curr         = '50000.00'
+*        cost_curr        = '35000.00'
+*        prof_curr        = '15000.00'
+*        text             = 'Sample variation test record.'
+*        mandt            = sy-mandt
+*        qmnum            = '000400000094'
+*        qmtxt            = 'Variation for Scope Change'
+*        aennr            = ''
+*        priok            = '1'
+*        var_reason       = 'SCOP'
+*        var_rej_reason   = ''
+*        ernam            = sy-uname
+*        erdat            = sy-datum
+*        date_appr        = sy-datum
+*        date_rej         = '00000000'
+*        aenam            = ''
+*        aedat            = '00000000'
+*        kurst            = 'M'
+*        waers            = 'AUD'
+*        objnr            = 'QN000400000094'
+*        ebeln            = ''
+*        ebelp            = '00000'
+*        vbeln            = ''
+*        pspid            = 'P.000245'
+*        psp_nr           = '00001234'
+*        ref_ext1         = 'EXT-999'
+*        ref_int1         = 'INT-111'
+*        estimated_costs  = '35000.00'
+*        qwrnum           = ''
+*        estimated_rev    = '50000.00'
+*        profit_perc      = '30.00'
+*        probability      = '100.00'
+*        expected_reven   = '50000.00'
+*        expected_fcast   = '50000.00'
+*        expected_budget  = '35000.00'
+*        revenue_updated  = abap_true
+*        budget_updated   = abap_true
+*        fcast_updated    = abap_true
+*        revenue_upd_flg  = 'X'
+*        budget_upd_flg   = 'X'
+*        fcast_upd_flg    = 'X'
+*        salesord_updated = abap_false
+*        salesord_reverse = abap_false
+*        template         = ''
+*        use_date_appr    = abap_true )
+*    ).
+*    Call METHOD lo_cl_wf->start_workflow
+*      EXPORTING
+*        iv_stepnumber                = '020'                 " Current Approval Step
+*        iv_initiator                 = 'US117001'                 " Agent
+*        iv_portfolioitem             =  'P.000245'                 " Element
+*        iv_requestor                 =   'US117001'                " Agent
+*        iv_variationnumber           =  '400000094'                " Notification Number
+*        iv_deep_link_url             =   lt_url                " URL
+*        iv_variation_type            =   'Z4'               " Notification Type
+*        iv_wf_path                   =   '01'               " Approval path
+*        iv_curr_wf_status            =    ''              " Current workflow status
+*        iv_curr_workflow_action      =   'PP_ENDORSER'               " Workflow Action
+*        iv_projectname               =   'test 123'               " Project name
+*        iv_curr_approver             =   ''               " Agent
+*        iv_curr_approver_name        =   ''               " Current approver name
+*        iv_pmapprover                =   'US117001'                " PM Approver
+*        iv_dp_status_approver        =   ''               " DP status manager(WF manager)
+*        iv_bus_support_appover       =  ''                " Bus support manager
+*        iv_interested_party_approver =  ''                " Interested party manager
+*        iv_proj_fincon_approver      =  ''                " Proj Fincon approver
+*        iv_curr_workflow_action_text =  'Endorse'                " Char 80
+*        iv_governancerole_text       =  'Phase progression Endorse'                " Char 80
+*         it_variation_head            =       lt_variation_head             " table type of ZPPM_TT_EVM_QMEL
+*      .
+*     MESSAGE 'Created event successfully' TYPE 'I' DISPLAY LIKE 'S'.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->SENDMAIL_APPROVAL
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_VARIATIONNUMBER             TYPE        QMNUM(optional)
+* | [--->] IV_DEEP_LINK_URL               TYPE        LCM_URL(optional)
+* | [--->] IV_CURR_WORKFLOW_ACTION        TYPE        ZWRKFLOW_ACT(optional)
+* | [--->] IV_ACTION_EVENT                TYPE        CHAR20(optional)
+* | [--->] IT_RECIPIENTS                  TYPE        ZPPM_TT_VARIATION_HOLDER(optional)
+* | [--->] IS_VARIATIONHEAD               TYPE        /NOVECO/VAR_HEAD(optional)
+* | [EXC!] NO_RECIPIENTS_FOUND
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD sendmail_approval.
+
+    DATA: lv_text1 TYPE char255.
+*-- Local data declaration for sending mail
+    DATA: lo_send_request  TYPE REF TO cl_bcs,
+          lo_document      TYPE REF TO cl_document_bcs,
+          lo_sender        TYPE REF TO cl_sapuser_bcs,
+          lv_sub           TYPE char50,
+          lo_recipient     TYPE REF TO if_recipient_bcs,
+          lt_contents      TYPE STANDARD TABLE OF soli,
+          lv_doc_len       TYPE so_obj_len,
+          lv_cnt           TYPE sy-tabix,
+          lv_result        TYPE sy-binpt,
+          lv_subj          TYPE string,
+          lo_bcs_exception TYPE REF TO cx_bcs,
+          lv_deep_url_link TYPE lcm_url..
+
+    DATA: lv_mail_address TYPE ad_smtpadr.
+    DATA: lv_address      TYPE REF TO cl_cam_address_bcs.
+    DATA: lv_addname      TYPE ad_smtpadr.
+    DATA lv_emailid TYPE adr6-smtp_addr.
+    DATA lv_pspid TYPE /rpm/tv_extid.
+    CONSTANTS: lc_new_line TYPE char255 VALUE '<br>',
+               lc_htm      TYPE char3 VALUE 'HTM'.
+
+    IF it_recipients IS INITIAL.
+      RAISE no_recipients_found.
+    ENDIF.
+
+    " 4. Dynamic Workflow Action / Role
+    CASE iv_curr_workflow_action .
+      WHEN zif_ppm_variation_wf_c=>c_workflow_action-approver_phase.
+        DATA(lv_wf_action_text) = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_phase.
+        DATA(lv_governancerole_text) = zif_ppm_variation_wf_c=>c_governance_role_action-pp_approver.
+      WHEN zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_wf_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_invest.
+         lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-inv_approver.
+      WHEN zif_ppm_variation_wf_c=>c_workflow_action-endorser .
+        lv_wf_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser .
+        lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser.
+      WHEN zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager.
+        lv_wf_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-decpnt_manager.
+         lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-initiator.
+      WHEN zif_ppm_variation_wf_c=>c_workflow_action-interested.
+        lv_wf_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-interested.
+          lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-interest_party.
+      WHEN OTHERS.
+    ENDCASE.
+
+*    Get project name
+    "PROJ
+    SELECT SINGLE  Post1 as ProjectDescription
+      FROM ZI_BI_RawS4_PROJ WITH PRIVILEGED ACCESS
+      WHERE  pspid = @is_variationhead-pspid INTO @DATA(lv_prj_name).
+    IF sy-subrc IS INITIAL.
+    ENDIF.
+*  -- Subject of the Mail
+
+    IF iv_action_event = zif_ppm_variation_wf_c=>c_action_event-Step_Approved.
+      DATA(lv_mailsubj) = | { zif_ppm_variation_wf_c=>c_action_event-Step_Approved } Variation - { iv_variationnumber } - { lv_prj_name }|.
+      lv_deep_url_link = |<p>Action: <a href=" { iv_deep_link_url } ">Click here to view</a> </p>| .
+    ELSEIF  iv_action_event = zif_ppm_variation_wf_c=>c_action_event-Rejected .
+      lv_mailsubj = | { zif_ppm_variation_wf_c=>c_action_event-Rejected  } Variation - { iv_variationnumber } - { lv_prj_name }|.
+      lv_deep_url_link = |<p>Action: <a href=" { iv_deep_link_url } ">Click here to view</a> </p>| .
+    ELSEIF  iv_action_event = zif_ppm_variation_wf_c=>c_action_event-WorkItemCreated .
+      lv_mailsubj = | { lv_wf_action_text } Variation Approval - { iv_variationnumber } - { lv_prj_name }|.
+      lv_deep_url_link = |<p>Action: <a href=" { iv_deep_link_url } ">Click here to view and action</a> </p>| .
+    ELSEIF  iv_action_event = zif_ppm_variation_wf_c=>c_action_event-Complete_Approved.
+      lv_mailsubj = | { zif_ppm_variation_wf_c=>c_action_event-Complete_Approved } Variation - { iv_variationnumber } - { lv_prj_name }|.
+      lv_deep_url_link = |<p>Action: <a href=" { iv_deep_link_url } ">Click here to view</a> </p>| .
+    ELSEIF  iv_action_event = zif_ppm_variation_wf_c=>c_action_event-Requestinformation.
+      lv_mailsubj = | { zif_ppm_variation_wf_c=>c_action_event-Requestinformation } Variation - { iv_variationnumber } - { lv_prj_name }|.
+      lv_deep_url_link = |<p>Action: <a href=" { iv_deep_link_url } ">Click here to view and action</a> </p>| .
+     ELSEIF  iv_action_event = zif_ppm_variation_wf_c=>c_action_event-Submitted.
+     lv_mailsubj = | { zif_ppm_variation_wf_c=>c_action_event-Submitted } Variation Approval - { iv_variationnumber } - { lv_prj_name }|.
+      lv_deep_url_link = |<p>Action: <a href=" { iv_deep_link_url } ">Click here to view</a> </p>| .
+    ENDIF.
+* Get Variation Reasons
+    "SELECT SINGLE var_reas_desc FROM /noveco/epm_vres INTO @DATA(lv_var_reas_desc) WHERE  var_reas = @is_variationhead-var_reason.
+
+    CALL METHOD me->read_noveco_epm_vres(
+      EXPORTING
+        iv_var_reas = is_variationhead-var_reason
+      IMPORTING
+        ev_var_reas_desc = DATA(lv_var_reas_desc)
+    ).
+
+* Get Variation Rejection Reasons
+    "SELECT SINGLE var_rejreas_desc FROM /noveco/epm_vrej INTO @DATA(lv_var_rej_reason) WHERE  var_rej_reas = @is_variationhead-var_rej_reason .
+
+     CALL METHOD me->read_noveco_epm_vrej(
+      EXPORTING
+        iv_var_rej_reas = is_variationhead-var_rej_reason
+      IMPORTING
+        ev_var_reas_desc = DATA(lv_var_rej_reason)
+    ).
+
+
+
+    CALL FUNCTION 'CONVERSION_EXIT_ABPSN_OUTPUT'
+      EXPORTING
+        input         = is_variationhead-pspid
+    IMPORTING
+      OUTPUT        = lv_pspid
+              .
+
+    LOOP AT it_recipients INTO DATA(ls_recipient).
+      REFRESH: lt_contents.
+*  --Send mail--------------------------------
+
+      " 1. Greeting
+      APPEND VALUE #( line = |<p>Dear { ls_recipient-fullname },</p>| ) TO lt_contents.
+
+      " 2. Empty spacing line
+      APPEND VALUE #( line = '<p> </p>' ) TO lt_contents.
+
+      " 3. Dynamic Variation Number
+      APPEND VALUE #( line = |<p>Variation number: { iv_variationnumber }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Project def: { lv_pspid }</p>| ) TO lt_contents.
+*      APPEND VALUE #( line = |<p>Created By: { is_variationhead-ernam }</p>| ) TO lt_contents.
+*      APPEND VALUE #( line = |<p>Created On: { is_variationhead-erdat }</p>| ) TO lt_contents.
+*      APPEND VALUE #( line = |<p>Purchasing Doc: { is_variationhead-ebeln }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Variation Reason: { lv_var_reas_desc }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Rejection Reason: { lv_var_rej_reason }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Priority: { is_variationhead-priok }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Total Revenue: { is_variationhead-estimated_rev }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Total Costs: { is_variationhead-estimated_costs }</p>| ) TO lt_contents.
+      APPEND VALUE #( line = |<p>Total Profit: { is_variationhead-profit_perc }</p>| ) TO lt_contents.
+      DATA(lv_date_app) = |{ is_variationhead-date_appr DATE = USER }|.
+      APPEND VALUE #( line = |<p>Variation Date: { lv_date_app }</p>| ) TO lt_contents.
+
+      APPEND VALUE #( line = |<p>Your Role: { lv_governancerole_text }</p>| ) TO lt_contents.
+
+      " 5. Dynamic Action Link (Fixed HTML syntax with target="_blank")
+
+
+      APPEND VALUE #( line = |{ lv_deep_url_link }| ) TO lt_contents.
+      " 2. new line
+      APPEND VALUE #( line = '<br>' ) TO lt_contents.
+      " 2. new line
+      APPEND VALUE #( line = '<br>' ) TO lt_contents.
+      "6. Diclaimer
+      APPEND VALUE #( line = 'This is an automated message from the BCC Variation Approval Workflow.') TO lt_contents.
+      "7. Trailing empty spacing line
+      APPEND VALUE #( line = '<p> </p>' ) TO lt_contents.
+      TRY.
+*    -- Create persistent send request
+          lo_send_request = cl_bcs=>create_persistent( ).
+
+
+*    -- Get the length of the Document
+
+          DESCRIBE TABLE lt_contents LINES lv_cnt.
+          DATA(ls_contnets) = lt_contents[ lv_cnt ].
+          lv_doc_len = ( lv_cnt - 1 ) * 255 + strlen( ls_contnets ).
+
+*    -- Subject of the mail
+          lv_sub = lv_mailsubj.
+
+*    -- Create Document
+          lo_document = cl_document_bcs=>create_document(
+                       i_type       = lc_htm
+                       i_text       = lt_contents
+                       i_length     = lv_doc_len
+                       i_subject    = lv_sub
+                       i_language   = sy-langu
+                       i_importance = '1' ).
+
+
+          TRY.
+*    -- Set the Message Subject
+              CALL METHOD lo_send_request->set_message_subject
+                EXPORTING
+                  ip_subject = lv_subj.
+            CATCH cx_sy_dyn_call_illegal_method.
+          ENDTRY.
+
+
+*    -- Add document to send request
+          CALL METHOD lo_send_request->set_document( lo_document ).
+
+*    -- Do send delivery info for successful mails
+          CALL METHOD lo_send_request->set_status_attributes
+            EXPORTING
+              i_requested_status = 'E'
+              i_status_mail      = 'A'.
+**          Fetch Domain mail
+**         Approval mail will have sender name as per below matrix so approval can
+**         easily categorize his/her pending items
+*          SELECT SINGLE unx_config FROM sopr INTO lv_mail_address.
+*          IF sy-subrc EQ 0.
+*            CONCATENATE 'SAP_WFRT' lv_mail_address INTO lv_mail_address SEPARATED BY '@'.
+*            lv_addname = 'Workflow System'(025).
+*
+*            TRY.
+*                CALL METHOD cl_cam_address_bcs=>create_internet_address
+*                  EXPORTING
+*                    i_address_string = lv_mail_address
+*                    i_address_name   = lv_addname
+**                   i_incl_sapuser   =
+*                  RECEIVING
+*                    result           = lv_address.
+*              CATCH cx_address_bcs .
+*            ENDTRY.
+*          ENDIF.
+          DATA:
+         lv_default_addr TYPE smail_df_sender_addr.
+          TRY.
+              " Call the instance creation method present in your class signature
+              DATA(lo_mail_config) = cl_bcs_mail_system_config=>create_instance( ).
+
+              " Retrieve the default system sender configuration (replaces SOPR query)
+              lo_mail_config->read_default_sender_address(
+                IMPORTING
+                  ev_default_sender_address = lv_default_addr
+              ).
+
+            CATCH cx_root. " Catching configuration fetch failures safely
+          ENDTRY.
+
+          " Fallback: If your system's default sender address is fully qualified (e.g. 'do-not-reply@domain.com')
+          " extract the domain, or fallback to your system id if empty.
+          IF lv_default_addr IS NOT INITIAL.
+            IF lv_default_addr CS '@'.
+              SPLIT lv_default_addr AT '@' INTO DATA(lv_user) DATA(lv_domain).
+            ELSE.
+              lv_domain = lv_default_addr.
+            ENDIF.
+          ENDIF.
+
+          " Construct the clean core sender address layout safely
+          IF lv_domain IS NOT INITIAL.
+            lv_mail_address = |SAP_WFRT@{ lv_domain }|.
+            lv_addname      = 'Workflow System'(025).
+
+*            TRY.
+*                " Use your standard whitelisted cloud email address wrapper
+*                lo_sender = cl_bcs_email_address=>create_instance(
+*                              iv_address = lv_mail_address
+*                              iv_name    = lv_addname
+*                            ).
+*              CATCH cx_bcs_email_address.
+*                " Faulty address handler block
+*            ENDTRY.
+            TRY.
+                CALL METHOD cl_cam_address_bcs=>create_internet_address
+                  EXPORTING
+                    i_address_string = lv_mail_address
+                    i_address_name   = lv_addname
+*                   i_incl_sapuser   =
+                  RECEIVING
+                    result           = lv_address.
+              CATCH cx_address_bcs .
+            ENDTRY.
+*          ENDIF.
+          ENDIF.
+*    -- Set sender
+*          l_sender = cl_sapuser_bcs=>create( sy-uname ).
+          CALL METHOD lo_send_request->set_sender
+            EXPORTING
+              i_sender = lv_address. "l_sender.
+
+*    -- Add the recipients to the Send mail
+
+          lv_emailid = ls_recipient-email.
+          lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                                                        lv_emailid  ).
+          CALL METHOD lo_send_request->add_recipient
+            EXPORTING
+              i_recipient = lo_recipient
+              i_express   = 'X'.
+
+*    -- Send Email
+          CALL METHOD lo_send_request->send(
+            EXPORTING
+              i_with_error_screen = 'X'
+            RECEIVING
+              result              = lv_result ).
+
+          COMMIT WORK AND WAIT.                        "Commit Work
+
+        CATCH cx_bcs INTO lo_bcs_exception.
+      ENDTRY.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->SETFLOWSTATUS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_WFINST_MAIN                 TYPE        RPM_TV_GUID(optional)
+* | [--->] IV_VARIATION_NUMBER            TYPE        QMNUM(optional)
+* | [--->] IV_DECISION_WI_RESULT          TYPE        SWD_RETUR_(optional)
+* | [--->] IV_WORKFLOW_ACTION             TYPE        ZWRKFLOW_ACT(optional)
+* | [--->] IV_CURRENT_STEP_UUID           TYPE        SYSUUID_X16(optional)
+* | [--->] IV_FINAL_STEP_UUID             TYPE        SYSUUID_X16(optional)
+* | [--->] IV_LASTLEVELAPPROVAL           TYPE        BOOLE_D(optional)
+* | [--->] IV_LAST_CHANGED_BY             TYPE        SY-UNAME(optional)
+* | [<---] R_RESULT                       TYPE        BOOLE_D
+* | [EXC!] UPDATE_CURR_STAT_STEP_FAILED
+* | [EXC!] UPDATE_FINAL_STAT_STEP_FAILED
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD setflowstatus.
+
+    DATA lv_flow_status TYPE numc5.
+    r_result = abap_false.
+    IF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-approve.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        IF iv_lastlevelapproval = abap_true.
+          lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-approved.
+        ELSE.
+          lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+        ENDIF.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+      ENDIF.
+
+    ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-requestinformation.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+      ENDIF.
+    ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-reject.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-rejected.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-rejected.
+      ENDIF.
+     ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_flow_status = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+      ENDIF.
+    ENDIF.
+    "Commit to db table
+    " Declares a variable inline and fills it with the current timestamp (YYYYMMDDHHMMSS)
+    GET TIME STAMP FIELD DATA(lv_current_timestamp).
+    " You can then assign it directly inside your VALUE expression:
+    DATA(lv_local_changed_at) = lv_current_timestamp.
+    SELECT SINGLE wfinstmain
+       FROM zi_ppm_variat_appr WITH PRIVILEGED ACCESS
+    WHERE wfinstmain  = @iv_wfinst_main
+      AND variation_number = @iv_variation_number INTO @DATA(lv_wfinstmain_ck) .
+    IF sy-subrc IS INITIAL.
+      IF iv_lastlevelapproval = abap_true AND iv_final_step_uuid IS NOT INITIAL.
+        UPDATE zppm_variat_appr
+        SET current_step_uuid = iv_current_step_uuid final_step_uuid = iv_final_step_uuid status = lv_flow_status
+            local_last_changed_by = iv_last_changed_by
+            local_last_changed_at = lv_local_changed_at
+            last_changed_at = lv_local_changed_at
+        WHERE wfinst_main = iv_wfinst_main
+        AND variation_number = iv_variation_number.
+        IF sy-subrc IS INITIAL.
+          COMMIT WORK AND WAIT.
+        ELSE.
+          RAISE update_final_stat_step_failed.
+        ENDIF.
+      ELSE.
+        UPDATE zppm_variat_appr
+        SET current_step_uuid = iv_current_step_uuid status = lv_flow_status
+            local_last_changed_by = iv_last_changed_by
+            local_last_changed_at = lv_local_changed_at
+            last_changed_at = lv_local_changed_at
+        WHERE wfinst_main = iv_wfinst_main
+        AND variation_number = iv_variation_number.
+        IF sy-subrc IS INITIAL.
+          COMMIT WORK AND WAIT.
+        ELSE.
+          RAISE update_curr_stat_step_failed.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    r_result = abap_true.
+
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->START_WORKFLOW
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_STEPNUMBER                  TYPE        MMPUR_WF_CURRENT_APPROVAL_STEP(optional)
+* | [--->] IV_INITIATOR                   TYPE        SWP_AGENT(optional)
+* | [--->] IV_PORTFOLIOITEM               TYPE        /RPM/TV_EXTID(optional)
+* | [--->] IV_REQUESTOR                   TYPE        SWP_AGENT(optional)
+* | [--->] IV_VARIATIONNUMBER             TYPE        QMNUM(optional)
+* | [--->] IV_DEEP_LINK_URL               TYPE        TSFTEXT(optional)
+* | [--->] IV_VARIATION_TYPE              TYPE        QMART(optional)
+* | [--->] IV_WF_PATH                     TYPE        ZDE_APPRV_PATH(optional)
+* | [--->] IV_CURR_WF_STATUS              TYPE        CHAR30(optional)
+* | [--->] IV_CURR_WORKFLOW_ACTION        TYPE        ZWRKFLOW_ACT(optional)
+* | [--->] IV_PROJECTNAME                 TYPE        PS_POST1(optional)
+* | [--->] IV_CURR_APPROVER               TYPE        SWP_AGENT(optional)
+* | [--->] IV_CURR_APPROVER_NAME          TYPE        CHAR100(optional)
+* | [--->] IV_PMAPPROVER                  TYPE        SWP_AGENT(optional)
+* | [--->] IV_DP_STATUS_APPROVER          TYPE        SWP_AGENT(optional)
+* | [--->] IV_BUS_SUPPORT_APPOVER         TYPE        SWP_AGENT(optional)
+* | [--->] IV_INTERESTED_PARTY_APPROVER   TYPE        SWP_AGENT(optional)
+* | [--->] IV_PROJ_FINCON_APPROVER        TYPE        SWP_AGENT(optional)
+* | [--->] IV_CURR_WORKFLOW_ACTION_TEXT   TYPE        CHAR80(optional)
+* | [--->] IV_GOVERNANCEROLE_TEXT         TYPE        CHAR80(optional)
+* | [--->] IT_VARIATION_HEAD              TYPE        /NOVECO/VAR_HEAD(optional)
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD start_workflow.
+
+    DATA: lo_event           TYPE REF TO if_swf_evt_event,
+          lv_object_id       TYPE mmpur_key,
+          lo_event_container TYPE REF TO if_swf_ifs_parameter_container,
+          lv_r_result        TYPE boole_d.
+    DATA: lv_wfinst_main    TYPE rpm_tv_guid,
+          lv_chk_crt_wfinst TYPE boole_d,
+          lv_step_uuid      TYPE rpm_tv_guid,
+          lr_actions        TYPE RANGE OF zwrkflow_act,
+          lsr_action        LIKE LINE OF lr_actions..
+
+
+   "DATA(ls_variationhead) = VALUE #( it_variation_head[ 1 ] OPTIONAL ).
+    DATA ls_variation_head  TYPE /noveco/var_head .
+
+    ls_variation_head  = it_variation_head..
+
+    lv_object_id = iv_variationnumber.
+    lv_chk_crt_wfinst = abap_true.
+
+* Get the first step number instead of using the Iv_stepnumber.
+
+    " Modern internal table population using VALUE operator with conditional logic
+    lr_actions = VALUE #(
+      sign   = 'I'
+      option = 'EQ'
+      ( low =  zif_ppm_variation_wf_c=>c_workflow_action-endorser )
+      " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+      "( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+    ).
+    " read project role.
+      SELECT portfolioitem,
+        counter,
+        positionid,
+        rolename,
+        roleposition,
+        role,
+        roleadditionalresponsible,
+        decpointgovernancerole,
+        workflowaction,
+        workflowsequence,
+        variationsequence
+       FROM zi_ppm_projectroles
+     WHERE portfolioitem = @iv_portfolioitem
+      AND workflowaction IN @lr_actions
+      AND positionid IS NOT INITIAL INTO TABLE @DATA(lt_proj_roles).
+     IF sy-subrc IS INITIAL.
+         IF iv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
+          DATA(lv_wf_path) = zif_ppm_variation_wf_c=>c_workflow_type-internal.
+          " read project role.
+
+          DELETE lt_proj_roles  WHERE variationsequence IS INITIAL.
+          SORT lt_proj_roles BY variationsequence  ASCENDING.
+            "DATA(lv_total_steps) = lines( lt_proj_roles ).
+          DATA(ls_proj_roles) = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
+          DATA(lv_step_number_first) =  ls_proj_roles-variationsequence.
+          DATA(lv_workflow_seq_var)      = lv_step_number_first.
+          DATA(lv_total_steps) = lines( lt_proj_roles ).
+          " DATA(lv_wf_path) = '01'.
+        ELSEIF iv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+
+          DELETE lt_proj_roles WHERE workflowsequence IS INITIAL.
+          SORT lt_proj_roles BY workflowsequence ASCENDING.
+            "lv_total_steps = lines( lt_proj_roles ).
+          ls_proj_roles = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
+          lv_step_number_first =  ls_proj_roles-workflowsequence.
+          DATA(lv_workflow_seq)      = lv_step_number_first.
+          lv_total_steps = lines( lt_proj_roles ).
+          lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external.
+        ENDIF.
+     ENDIF.
+
+    "read the portfolio item details for parent bucket and portfolio UUIDs
+    SELECT SINGLE ProjectPortfolioUUID,
+                  ProjectPortfolioItemUUID,
+                  ProjPrtfloItemParentObjectUUID,
+                   ProjectPortfolioItem
+      FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+     WHERE ProjectPortfolioItem = @iv_portfolioitem
+     INTO @DATA(ls_portfolio_item).
+    IF sy-subrc IS INITIAL.
+      DATA(lv_item_guid)  = ls_portfolio_item-ProjectPortfolioItemUUID.
+    ENDIF.
+
+
+*   Must to validate variation data before call trigger workflow.
+    CALL METHOD me->validate_trigger_workflow
+      EXPORTING
+        is_variationhead        = ls_variation_head
+        iv_wf_path              = iv_wf_path
+      IMPORTING
+        r_result                = lv_r_result
+      EXCEPTIONS
+        failedtotriggerworkflow = 1 " Failed to trigger workflow
+        OTHERS                  = 2.
+    IF sy-subrc <> 0.
+*       MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+*     for tesing in d41 100
+*        CHECK lv_r_result = abap_true.
+
+    IF lv_r_result = abap_true.
+*---------------------------------------------------------------
+*     Create instance for workflow.
+      SELECT SINGLE status FROM zi_ppm_variat_appr WITH PRIVILEGED ACCESS "#EC CI_ALL_FIELDS_NEEDED
+      WHERE itemguid = @ls_portfolio_item-projectportfolioitemuuid
+        AND variation_number = @iv_variationnumber
+        AND status = @zif_ppm_variation_wf_c=>c_flow_status-in_progress
+       INTO @DATA(lv_variat_appr_stat).
+      IF sy-subrc IS INITIAL.
+
+        IF lv_variat_appr_stat = zif_ppm_variation_wf_c=>c_flow_status-in_progress.
+          lv_chk_crt_wfinst = abap_false.
+          MESSAGE e005(zppm_var) WITH iv_variationnumber.
+          RETURN.
+*              ELSEIF  ls_variat_appr_chk-status = zif_ppm_variation_wf_c=>c_flow_status-approved.
+*                lv_chk_crt_wfinst = abap_false.
+*                MESSAGE e006(zppm_var) WITH iv_variationnumber.
+*                RETURN.
+*              ELSEIF  ls_variat_appr_chk-status = zif_ppm_variation_wf_c=>c_flow_status-rejected
+*                OR ls_variat_appr_chk-status = zif_ppm_variation_wf_c=>c_flow_status-cancelled.
+*                lv_chk_crt_wfinst = abap_true.
+        ENDIF.
+      ELSE.
+        lv_chk_crt_wfinst = abap_true.
+      ENDIF.
+      IF  lv_chk_crt_wfinst = abap_true.
+
+        " Declares a variable inline and fills it with the current timestamp (YYYYMMDDHHMMSS)
+        GET TIME STAMP FIELD DATA(lv_current_timestamp).
+        " You can then assign it directly inside your VALUE expression:
+        DATA(lv_local_created_at) = lv_current_timestamp.
+        CALL METHOD me->generate_uuid
+          IMPORTING
+            ev_guid = lv_wfinst_main.
+        DATA(ls_variat_appr) = VALUE zppm_variat_appr(
+                                                        wfinst_main = lv_wfinst_main
+                                                        variation_number = iv_variationnumber
+                                                        item_guid = lv_item_guid
+                                                        status = zif_ppm_variation_wf_c=>c_flow_status-in_progress
+                                                        initiated_by = iv_initiator
+                                                        local_created_by = iv_initiator
+                                                        local_created_at = lv_local_created_at ).
+        MODIFY zppm_variat_appr FROM ls_variat_appr.
+        IF sy-subrc IS INITIAL.
+          COMMIT WORK AND WAIT.
+*              Create the first Step for variation step approval
+          CALL METHOD me->generate_uuid
+            IMPORTING
+              ev_guid = lv_step_uuid.
+
+          DATA(ls_step) = VALUE zppm_variat_step( step_uuid  = lv_step_uuid
+                                  wfinst_main =  lv_wfinst_main
+                                  counter = 1
+                                  ppm_item = iv_portfolioitem
+                                  variation_number = iv_variationnumber
+                                  variation_type = iv_variation_type
+                                  workflow_seq_var = lv_workflow_seq_var
+                                  workflow_seq = lv_workflow_seq
+                                  workflow_action = iv_curr_workflow_action
+                                 " prjrole_role = ls_next_post_appr-prjrole_role
+                                  "govern_role = ls_next_post_appr-des_point_govrole
+                                  "position_id = ls_next_post_appr-position_id
+                                  local_created_by = iv_initiator
+                                  local_created_at = lv_local_created_at ).
+
+          MODIFY zppm_variat_step FROM ls_step.
+          IF sy-subrc IS INITIAL.
+            COMMIT WORK AND WAIT.
+          ENDIF.
+*          ---------------------------------------------------------------
+          TRY.
+*                start workflow
+*                " 1. Explicitly create an empty parameter container instance first
+
+              lo_event_container = cl_swf_evt_event=>get_event_container(
+                im_objcateg = 'CL'
+                im_objtype  = zif_ppm_variation_wf_c=>gc_workflow_leading_object  "
+                im_event    = zif_ppm_variation_wf_c=>gc_submitted_for_appr_event ).
+
+              lo_event_container->set(
+                EXPORTING
+                  name       = zif_ppm_variation_wf_c=>gc_iv_initiator  "IV_INITIATOR event container parameter
+                  value      = iv_initiator ).  "Value to be set
+
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_object_id  "IV_OBJECT_ID event container parameter
+                   value      = lv_object_id ).   "Value to be set
+
+              "IV_REQUESTOR
+              lo_event_container->set(
+              EXPORTING
+                name       = zif_ppm_variation_wf_c=>gc_iv_requestor
+                value      = iv_requestor ).   "Value to be set
+              "IV_VARIATIONNUMBER
+              lo_event_container->set(
+              EXPORTING
+                name       = zif_ppm_variation_wf_c=>gc_iv_variationnumber
+                value      = lv_object_id  ).   "Value to be set
+              "PortfolioItem
+              lo_event_container->set(
+              EXPORTING
+                name       = zif_ppm_variation_wf_c=>gc_PortfolioItem
+                value      = iv_portfolioitem  ).   "Value to be set
+              "IV_DEEP_LINK_URL
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_deep_link_url
+                   value      = iv_deep_link_url ).   "Value to be set
+              "IV_VARIATION_TYPE
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_variation_type
+                   value      = iv_variation_type ).   "Value to be set
+              "IV_WF_PATH
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_wf_path
+                   value      = iv_wf_path ).   "Value to be set
+              "IV_CURR_WF_STATUS
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_curr_wf_status
+                   value      = iv_curr_wf_status ).   "Value to be set
+              "IV_CURR_WORKFLOW_ACTION
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_curr_workflow_action
+                   value      = iv_curr_workflow_action ).   "Value to be set
+              "IV_PROJECTNAME
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_projectname
+                   value      = iv_projectname ).   "Value to be set
+              "IV_CURR_APPROVER
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_curr_approver
+                   value      = iv_curr_approver ).   "Value to be set
+              "IV_CURR_APPROVER_NAME
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_iv_curr_approver_name
+                   value      = iv_curr_approver_name ).   "Value to be set
+
+
+              "PMAPPROVER
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_pmapprover
+                   value      = iv_pmapprover ).   "Value to be set
+
+              "DP_STATUS_APPROVER
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_dp_status_approver
+                   value      = iv_dp_status_approver ).   "Value to be set
+
+              "BUS_SUPPORT_APPOVER
+              lo_event_container->set(
+                 EXPORTING
+                   name       = zif_ppm_variation_wf_c=>gc_bus_support_appover
+                   value      = iv_bus_support_appover ).   "Value to be set
+              "INTERESTED_PARTY_APPROVER
+              lo_event_container->set(
+                EXPORTING
+                  name       = zif_ppm_variation_wf_c=>gc_interested_party_approver
+                  value      = iv_interested_party_approver ).   "Value to be set
+              "PROJ_FINCON_APPROVER
+              lo_event_container->set(
+                EXPORTING
+                  name       = zif_ppm_variation_wf_c=>gc_proj_fincon_approver
+                  value      = iv_proj_fincon_approver ).   "Value to be set
+
+              "CURR_WORKFLOW_ACTION_TEXT
+              lo_event_container->set(
+                EXPORTING
+                  name       = zif_ppm_variation_wf_c=>gc_curr_workflow_action_text
+                  value      = iv_curr_workflow_action_text ).   "Value to be set
+
+              "GOVERNANCEROLE_TEXT
+              lo_event_container->set(
+                EXPORTING
+                  name       = zif_ppm_variation_wf_c=>gc_governance_text
+                  value      = iv_governancerole_text ).   "Value to be set
+
+              "IT_VARIATION_HEAD
+              lo_event_container->set(
+              EXPORTING
+                name       =  zif_ppm_variation_wf_c=>gc_is_variation_head
+                value      = ls_variation_head ).   "Value to be set
+
+              "IV_WFINST_MAIN
+              lo_event_container->set(
+              EXPORTING
+                name       =  zif_ppm_variation_wf_c=>gc_iv_wfinst_main
+                value      = lv_wfinst_main ).   "Value to be set
+
+              "IV_STEPNUMBER
+              lo_event_container->set(
+              EXPORTING
+                name       =  zif_ppm_variation_wf_c=>gc_iv_stepnumber
+                value      = lv_step_number_first ).   "Value to be set
+
+              "lv_total_steps - IV_TOTAL_STEPS
+              lo_event_container->set(
+              EXPORTING
+                name       =  zif_ppm_variation_wf_c=>gc_iv_total_steps
+                value      = lv_total_steps  ).   "Value to be set
+
+*                 ---- get a instance for the event
+              lo_event = cl_swf_evt_event=>get_instance(
+                im_objcateg        = 'CL'
+                im_objtype  = zif_ppm_variation_wf_c=>gc_workflow_leading_object  "
+                im_event    = zif_ppm_variation_wf_c=>gc_submitted_for_appr_event
+                im_objkey          = lv_object_id
+                im_event_container = lo_event_container ).
+            CATCH cx_swf_cnt_cont_access_denied cx_swf_cnt_elem_access_denied cx_swf_cnt_elem_not_found
+                  cx_swf_cnt_elem_type_conflict cx_swf_cnt_unit_type_conflict cx_swf_cnt_elem_def_invalid
+                  cx_swf_cnt_container.
+              ##NO_HANDLER
+          ENDTRY.
+*                 -----------------------------------------------------------------------
+*                        RAISE in dialog (standard)
+*                 -----------------------------------------------------------------------
+          TRY.
+*           refresh the buffers -> requested by RGö 010220
+              cl_swf_evt_services=>reset_buffers( ).
+              CALL METHOD lo_event->raise( ).
+*                           CATCH cx_swf_evt_invalid_objtype. " Error in Class / Object Type
+*                           CATCH cx_swf_evt_invalid_event.   " Error in Event.
+            CATCH cx_root INTO DATA(lex_root). " should never occur
+              IF lex_root IS BOUND.
+                " l_string = lex_root->get_text( ).
+                " MESSAGE l_string TYPE 'I'.
+              ENDIF.
+          ENDTRY.
+          " Force the system to flush the workflow event queue to DB
+          COMMIT WORK AND WAIT.
+          IF sy-subrc IS INITIAL AND iv_interested_party_approver IS NOT INITIAL.
+            "Send notification email o interested party.
+            "DATA lv_deep_link_url TYPE LCM_URL.
+            DATA(lv_deeplinkurl) = REDUCE lcm_url(
+              INIT val = ``
+              FOR ls_line IN iv_deep_link_url
+              NEXT val = val && ls_line-tdline
+            ).
+            CONDENSE lv_deeplinkurl NO-GAPS.
+
+            DATA lt_recipients TYPE  zppm_tt_variation_holder.
+            DATA(lv_inters_approver) = iv_interested_party_approver+2.
+
+            SELECT userid, emailaddress AS email, fullname
+              FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+              WHERE userid = @lv_inters_approver
+              INTO TABLE @lt_recipients .
+            IF sy-subrc IS INITIAL.
+
+              CALL METHOD me->sendmail_approval
+                EXPORTING
+                  iv_variationnumber      = iv_variationnumber              " Notification Number
+                  iv_deep_link_url        = lv_deeplinkurl          " URL
+                  iv_curr_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-interested             " Workflow Action
+                  it_recipients           = lt_recipients
+                  is_variationhead        = ls_variation_head              " EVM Variation List
+                  iv_action_event         = zif_ppm_variation_wf_c=>c_action_event-Submitted
+                EXCEPTIONS
+                  no_recipients_found     = 1                " No recipients found
+                  OTHERS                  = 2.
+              IF sy-subrc <> 0.
+*                          MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*                            WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->UPDATE_TRACKING_STEPS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PPM_ITEM                    TYPE        /RPM/TV_EXTID
+* | [--->] IV_VARIATION_NUMBER            TYPE        QMNUM
+* | [--->] IV_STEPNUMBER                  TYPE        ZWRKFLOW_SEQ1
+* | [--->] IV_VARIATION_TYPE              TYPE        QMART
+* | [--->] IV_STATUS                      TYPE        NUMC5(optional)
+* | [--->] IV_WORKFLOW_ACTION             TYPE        ZWRKFLOW_ACT(optional)
+* | [--->] IV_GOVERN_ROLE                 TYPE        ZDP_GOV_ROLE(optional)
+* | [--->] IV_HOLDER_SUMMARY              TYPE        FINCS_LONG_TEXT_250(optional)
+* | [--->] IV_PROCESSED_BY                TYPE        EDOC_IT_PEC_EMAIL_ADDRESS(optional)
+* | [--->] IV_LOCAL_CREATED_BY            TYPE        ABP_CREATION_USER(optional)
+* | [--->] IV_WORKITEMID                  TYPE        SWW_WIID(optional)
+* | [--->] IV_DECISION_WI_RESULT          TYPE        SWD_RETUR_(optional)
+* | [--->] IV_LASTLEVELAPPROVAL           TYPE        BOOLE_D(optional)
+* | [--->] IV_PMAPPROVER                  TYPE        SWP_AGENT(optional)
+* | [--->] IV_INTERES_APPROVER            TYPE        SWP_AGENT(optional)
+* | [--->] IS_VARIATIONHEAD               TYPE        /NOVECO/VAR_HEAD(optional)
+* | [--->] IV_DEEP_LINK_URL               TYPE        TSFTEXT(optional)
+* | [--->] IV_WFINST_MAIN                 TYPE        RPM_TV_GUID(optional)
+* | [--->] IV_WF_PATH                     TYPE        ZDE_APPRV_PATH(optional)
+* | [<---] EV_RESULT                      TYPE        BOOLE_D
+* | [<-->] EV_WORKFLOW_ACTION             TYPE        ZWRKFLOW_ACT(optional)
+* | [<-->] EV_STEPNUMBER                  TYPE        ZWRKFLOW_SEQ1(optional)
+* | [<-->] EV_WORKFLOW_ACTION_TEXT        TYPE        CHAR80(optional)
+* | [<-->] EV_GOVERNANCEROLE_TEXT         TYPE        CHAR80(optional)
+* | [<-->] EV_TOTAL_STEPS                 TYPE        MMPUR_WF_CURRENT_APPROVAL_STEP(optional)
+* | [EXC!] SAVE_DATA_FAILED
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD update_tracking_steps.
+
+    DATA: lv_exist           TYPE boole_d,
+          ls_variations_step TYPE zppm_variat_step,
+          lv_action_comments TYPE swc_value,
+          lv_new_status      TYPE  swr_wistat,
+          lt_recipients      TYPE zppm_tt_variation_holder.
+    DATA lv_variation_status TYPE numc2.
+    DATA: lt_container              TYPE swrtcont,
+          lv_container_value        TYPE swc_value,
+          lv_return_code            TYPE sysubrc,
+          lv_document_id            TYPE so_entryid,
+          lt_attachment_txt_content TYPE  TABLE OF solisti1,
+          lt_message_lines          TYPE TABLE OF swr_messag,
+          lt_message_struct         TYPE TABLE OF swr_mstruc,
+          lv_decision_note          TYPE string,
+          lr_actions                TYPE RANGE OF zwrkflow_act,
+          lr_usrids_pm              TYPE RANGE OF swp_agent,
+          lr_usrids_inters          TYPE RANGE OF swp_agent,
+          lv_rework                 TYPE boole_d.
+    DATA lv_deep_link_url  TYPE string.
+
+    lv_exist = abap_false.
+
+    DATA(lv_variatwftype) = iv_wf_path.
+
+    SELECT
+      step_uuid,
+      wfinst_main,
+      counter,
+      workitemid,
+      ppmitem,
+      variationnumber,
+      variationtype,
+      status,
+      note,
+      workflowseqvar,
+      workflowseq,
+      workflowaction,
+      prjrolerole,
+      governrole,
+      positionid,
+      message,
+      holdersummary,
+      processedby,
+      localcreatedby,
+      localcreatedat,
+      locallastchangedby,
+      locallastchangedat,
+      lastchangedat
+     FROM zi_ppm_variation_steps WITH PRIVILEGED ACCESS
+     WHERE wfinst_main = @iv_wfinst_main
+     " AND WorkitemId = @iv_workitemid
+      AND ppmitem = @iv_ppm_item
+      "AND variationnumber = @iv_variation_number
+      ORDER BY counter DESCENDING INTO TABLE @DATA(lt_variation_steps).
+    IF sy-subrc IS INITIAL.
+      "get last step.
+      DATA(ls_lastitem_step) = VALUE #( lt_variation_steps[ 1 ] ).
+      DATA(lv_current_itnumber) = ls_lastitem_step-counter .
+*    ELSE.
+*      lv_current_itnumber = 1.
+    ENDIF.
+    lv_rework = ''.
+    IF lv_variatwftype = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
+      IF ls_lastitem_step-WorkflowSeqVar = iv_stepnumber  .
+        lv_exist = abap_true.
+        DATA(lv_workflow_seq_var)      = iv_stepnumber.
+      ELSE.
+        ls_lastitem_step = VALUE #( lt_variation_steps[ WorkflowSeqVar = iv_stepnumber ] ).
+        lv_current_itnumber = ls_lastitem_step-counter .
+        lv_workflow_seq_var      = iv_stepnumber.
+        lv_rework = 'X'.
+      ENDIF.
+      DATA(lv_wf_path) = zif_ppm_variation_wf_c=>c_workflow_type-internal.
+    ELSEIF lv_variatwftype = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+      IF  ls_lastitem_step-WorkflowSeq  = iv_stepnumber .
+        lv_exist = abap_true.
+        DATA(lv_workflow_seq)          = iv_stepnumber.
+      ELSE.
+        ls_lastitem_step = VALUE #( lt_variation_steps[ WorkflowSeq = iv_stepnumber ] ).
+        lv_current_itnumber = ls_lastitem_step-counter .
+        lv_workflow_seq    = iv_stepnumber.
+        lv_rework = 'X'.
+      ENDIF.
+      lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external.
+    ENDIF.
+    " Modern internal table population using VALUE operator with conditional logic
+    lr_actions = VALUE #(
+      sign   = 'I'
+      option = 'EQ'
+      ( low =  zif_ppm_variation_wf_c=>c_workflow_action-endorser )
+      " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+      "( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+    ).
+        " read project role.
+      SELECT portfolioitem,
+          counter,
+          positionid,
+          rolename,
+          roleposition,
+          role,
+          roleadditionalresponsible,
+          decpointgovernancerole,
+          workflowaction,
+          workflowsequence,
+          variationsequence
+      FROM zi_ppm_projectroles
+    WHERE portfolioitem = @iv_ppm_item
+    "  AND variationsequence = @lv_workflow_seq_var
+     AND workflowaction IN @lr_actions
+     AND positionid IS NOT INITIAL INTO TABLE @DATA(lt_proj_roles)   .
+    IF sy-subrc IS INITIAL.
+        IF lv_variatwftype = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
+        " read project role.
+
+        DELETE lt_proj_roles WHERE variationsequence IS INITIAL.
+        SORT lt_proj_roles BY variationsequence  ASCENDING.
+        DATA(ls_proj_roles) = VALUE #( lt_proj_roles[ variationsequence = lv_workflow_seq_var ]  OPTIONAL ).
+        DATA(lv_total_steps) = lines( lt_proj_roles ).
+
+      ELSEIF lv_variatwftype = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+
+       DELETE lt_proj_roles WHERE workflowsequence IS INITIAL.
+       SORT lt_proj_roles  BY workflowsequence ASCENDING.
+       ls_proj_roles = VALUE #( lt_proj_roles[ workflowsequence  = lv_workflow_seq ]  OPTIONAL ).
+       lv_total_steps = lines( lt_proj_roles ).
+
+      ENDIF.
+
+    ENDIF.
+
+    "Update total steps
+    ev_total_steps = lv_total_steps.
+    " get workflow item Actual agent.
+    "get SAP user id
+    DATA(lv_wi_actual_agent) = iv_local_created_by+2.
+    " get process email.
+    SELECT userid, emailaddress
+     FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+     WHERE
+      positionid = @ls_proj_roles-positionid
+      AND UserID = @lv_wi_actual_agent
+     INTO TABLE @DATA(lt_holders).
+    IF sy-subrc IS INITIAL.
+      DATA(ls_holder) = VALUE #( lt_holders[ UserID = lv_wi_actual_agent ] OPTIONAL ). "#EC CI_NOORDER
+    ELSE.
+    ENDIF.
+    " Declares a variable inline and fills it with the current timestamp (YYYYMMDDHHMMSS)
+    GET TIME STAMP FIELD DATA(lv_current_timestamp).
+    " You can then assign it directly inside your VALUE expression:
+    DATA(lv_local_changed_at) = lv_current_timestamp.
+* read decision comment-------------------
+
+*--- read the workitem container to access the decision note
+    CALL FUNCTION 'SAP_WAPI_READ_CONTAINER'
+      EXPORTING
+        workitem_id      = iv_workitemid
+      IMPORTING
+        return_code      = lv_return_code
+      TABLES
+        simple_container = lt_container.
+    lv_container_value = VALUE #( lt_container[ element = 'DECISION_NOTE' ]-value OPTIONAL ).
+    " CHECK lv_container_value IS NOT INITIAL.
+    IF lv_container_value IS NOT INITIAL.
+      CONDENSE lv_container_value.
+      lv_document_id = lv_container_value+5(34). "is there a better way? we couldnt find one...
+*--- read the sofm document and export the plain text
+      CALL FUNCTION 'SO_DOCUMENT_READ_API1'
+        EXPORTING
+          document_id    = lv_document_id
+        TABLES
+          object_content = lt_attachment_txt_content.
+
+      CONCATENATE LINES OF lt_attachment_txt_content INTO lv_decision_note SEPARATED BY cl_abap_char_utilities=>cr_lf.
+    ENDIF.
+*****Update Decision action for the current step and build the next step..************************************
+* Including send notification email***************************************************************************
+
+*  Update Flow Action*********************************************************************
+*    IF iv_lastlevelapproval IS INITIAL.
+
+      IF lv_current_itnumber = lv_total_steps.
+        DATA(lv_lastlevelapproval) = abap_true.
+      ELSE.
+        lv_lastlevelapproval = abap_false.
+      ENDIF.
+*    ELSE.
+*      lv_lastlevelapproval = iv_lastlevelapproval.
+*    ENDIF.
+    CALL METHOD me->setflowstatus
+      EXPORTING
+        iv_wfinst_main                = ls_lastitem_step-wfinst_main
+        iv_variation_number           = iv_variation_number
+        iv_decision_wi_result         = iv_decision_wi_result
+        iv_workflow_action            = iv_workflow_action
+        iv_current_step_uuid          = ls_lastitem_step-step_uuid
+        iv_final_step_uuid            = ls_lastitem_step-step_uuid
+        iv_lastlevelapproval          = lv_lastlevelapproval
+      IMPORTING
+        r_result                      = DATA(lv_flow_stat_result)
+      EXCEPTIONS
+        update_curr_stat_step_failed  = 1
+        update_final_stat_step_failed = 2
+        OTHERS                        = 3.
+    IF sy-subrc <> 0.
+*     MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*       WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+*  ---Update decision for the current step(action step)------------------------------------
+    IF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-approve.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        DATA(lv_status) = zif_ppm_variation_wf_c=>c_step_status-endorsed.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR  iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-approved.
+      ENDIF.
+    ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-requestinformation.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-more_info_req.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR  iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-more_info_req.
+      ENDIF.
+    ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-reject.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-rejected.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR  iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-rejected.
+      ENDIF.
+    ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit.
+      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-decision_pending.
+      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+        lv_status = zif_ppm_variation_wf_c=>c_step_status-decision_pending.
+      ENDIF.
+    ENDIF.
+    ls_variations_step = VALUE #(
+         step_uuid             = ls_lastitem_step-step_uuid
+         wfinst_main           = ls_lastitem_step-wfinst_main
+         counter               = lv_current_itnumber
+         wi_id                 = iv_workitemid
+         ppm_item              = iv_ppm_item
+         variation_number      = iv_variation_number
+         variation_type        = iv_variation_type
+         status                = lv_status
+         note                  = ''
+         workflow_seq_var      = lv_workflow_seq_var
+         workflow_seq          = lv_workflow_seq
+         workflow_action       = iv_workflow_action
+         prjrole_role          = ls_proj_roles-role
+         govern_role           = ls_proj_roles-decpointgovernancerole
+         position_id           = ls_proj_roles-positionid
+         message               = ''
+         holder_summary        =  lv_decision_note
+         processed_by          = ls_holder-emailaddress "mail
+         local_created_by      = ls_lastitem_step-localcreatedby
+         local_created_at      = ls_lastitem_step-localcreatedat
+         local_last_changed_by = ls_holder-userid
+         local_last_changed_at = lv_local_changed_at
+         last_changed_at       = lv_local_changed_at ).
+
+    MODIFY zppm_variat_step FROM ls_variations_step.
+    IF sy-subrc IS NOT INITIAL.
+      RAISE save_data_failed.
+    ELSE.
+      COMMIT WORK AND WAIT.
+*       Send mail to PM and cancel workflow in case of rejection.
+      IF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-approve.
+        "Send notification mail to PM recipient
+        IF lv_lastlevelapproval = abap_false.
+          DATA(lv_evt_type) = zif_ppm_variation_wf_c=>c_action_event-step_approved.
+        ELSEIF  lv_lastlevelapproval = abap_true.
+          lv_evt_type = zif_ppm_variation_wf_c=>c_action_event-complete_approved.
+        ENDIF.
+      ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-requestinformation.
+        lv_evt_type = zif_ppm_variation_wf_c=>c_action_event-requestinformation.
+        " Restart workflow.
+*          TRY.
+*             CALL METHOD me->restart_approval.
+*          CATCH cx_swf_evt_invalid_objtype
+*                cx_swf_evt_invalid_event.
+*            ENDTRY.
+
+      ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit.
+        lv_evt_type = zif_ppm_variation_wf_c=>c_action_event-ReSubmit.
+      ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-reject.
+        lv_evt_type = zif_ppm_variation_wf_c=>c_action_event-rejected.
+        "1. Cancel workflow.
+        CALL FUNCTION 'SAP_WAPI_ADM_WORKFLOW_CANCEL'
+          EXPORTING
+            workitem_id    = iv_workitemid
+            actual_agent   = ls_holder-userid
+            language       = sy-langu
+            do_commit      = 'X'
+          IMPORTING
+            return_code    = lv_return_code
+            new_status     = lv_new_status
+          TABLES
+            message_lines  = lt_message_lines
+            message_struct = lt_message_struct.
+
+      ENDIF.
+
+      "2. Send notification mail to PM recipient
+      " get process email.
+      IF iv_pmapprover IS NOT INITIAL.
+
+        lr_usrids_pm = VALUE #(
+         sign   = 'I'
+         option = 'EQ'
+         ( low =  iv_pmapprover+2 )
+         ).
+        SELECT userid, emailaddress, fullname
+         FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+         WHERE userid IN @lr_usrids_pm
+         INTO TABLE @lt_recipients .
+        IF sy-subrc IS INITIAL.
+          IF lt_recipients IS NOT INITIAL.
+
+            IF iv_deep_link_url IS NOT INITIAL.
+              LOOP AT iv_deep_link_url  INTO DATA(ls_url).
+                lv_deep_link_url = lv_deep_link_url  && ls_url-tdline.
+              ENDLOOP.
+            ENDIF.
+            DATA ls_variation_head TYPE /noveco/var_head.
+            ls_variation_head = CORRESPONDING #( is_variationhead ).
+            CALL METHOD me->sendmail_approval
+              EXPORTING
+                iv_variationnumber      = iv_variation_number              " Notification Number
+                iv_deep_link_url        = lv_deep_link_url          " URL
+                iv_curr_workflow_action = iv_workflow_action              " Workflow Action
+                it_recipients           = lt_recipients
+                is_variationhead        = ls_variation_head               " EVM Variation List
+                iv_action_event         = lv_evt_type
+              EXCEPTIONS
+                no_recipients_found     = 1                " No recipients found
+                OTHERS                  = 2.
+            IF sy-subrc <> 0.
+*              MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*                WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+      ENDIF.
+      IF iv_interes_approver IS NOT INITIAL.
+        IF  lv_evt_type = zif_ppm_variation_wf_c=>c_action_event-rejected OR
+           lv_evt_type = zif_ppm_variation_wf_c=>c_action_event-complete_approved.
+          IF iv_interes_approver IS NOT INITIAL.
+            lr_usrids_inters = VALUE #(
+            ( sign = 'I' option = 'EQ' low = iv_interes_approver+2 )
+            ).
+            CLEAR: lt_recipients .
+            SELECT userid, emailaddress, fullname
+             FROM zi_positionholder_dp WITH PRIVILEGED ACCESS
+             WHERE userid IN @lr_usrids_inters
+             INTO TABLE @lt_recipients .
+            IF sy-subrc IS INITIAL.
+              IF lt_recipients IS NOT INITIAL.
+                CLEAR: lv_deep_link_url.
+                IF iv_deep_link_url IS NOT INITIAL.
+                  CLEAR: ls_url.
+                  LOOP AT iv_deep_link_url  INTO ls_url.
+                    lv_deep_link_url = lv_deep_link_url  && ls_url-tdline.
+                  ENDLOOP.
+                ENDIF.
+                "DATA ls_variation_head TYPE /noveco/var_head.
+                ls_variation_head = CORRESPONDING #( is_variationhead ).
+                CALL METHOD me->sendmail_approval
+                  EXPORTING
+                    iv_variationnumber      = iv_variation_number
+                    iv_deep_link_url        = lv_deep_link_url
+                    iv_curr_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-interested
+                    it_recipients           = lt_recipients
+                    is_variationhead        = ls_variation_head
+                    iv_action_event         = lv_evt_type
+                  EXCEPTIONS
+                    no_recipients_found     = 1
+                    OTHERS                  = 2.
+                IF sy-subrc <> 0.
+*                      MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*                        WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+            "
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      IF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-approve
+        OR iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit.
+*  ***------------------------------------------------
+*   get the next approver based on the project role table
+*   then update back to container WORKFLOW_ACTION
+*  ---------------------------------------------------
+        IF lv_current_itnumber < lv_total_steps.
+          DATA  lv_iv_curr_step TYPE mmpur_wf_current_approval_step .
+          IF lv_rework = 'X'.
+            lv_iv_curr_step  = iv_stepnumber.
+          ELSE.
+            CLEAR lv_iv_curr_step.
+          ENDIF.
+          CALL METHOD me->build_next_step
+            EXPORTING
+              iv_variation_number     = iv_variation_number        " Notification Number
+              iv_current_step         = lv_iv_curr_step                           " Current Approval Step
+              iv_ppm_id               = iv_ppm_item                 " Business Object ID
+              iv_ppm_wf_action        = iv_workflow_action            " Workflow Action
+              iv_variation_type       = iv_variation_type           " Notification Type
+              iv_wf_path              = lv_wf_path                  " Approval path
+              iv_workitemid           = iv_workitemid               " Work item ID
+              iv_created_by           = ls_holder-userid             " user name of the current approver
+              iv_wfinst_main          = ls_lastitem_step-wfinst_main
+            IMPORTING
+              ev_wf_act_next_approver = ev_workflow_action          " Workflow Action of the next approver
+              ev_stepnumber           = ev_stepnumber               " Var WF Sequence of the next approver
+              ev_workflow_action_text = ev_workflow_action_text     " Workflow action text of the next approver
+              ev_governancerole_text  = ev_governancerole_text.      " Governance role of the next approver
+        ENDIF.
+
+      ENDIF.
+    ENDIF.
+*****End of Update Decision action for the current step and build the next step.************************************
+*---------------------------------------------------
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->VALIDATE_TRIGGER_WORKFLOW
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_VARIATIONHEAD               TYPE        /NOVECO/VAR_HEAD(optional)
+* | [--->] IV_WF_PATH                     TYPE        ZDE_APPRV_PATH
+* | [<---] R_RESULT                       TYPE        BOOLE_D
+* | [EXC!] FAILEDTOTRIGGERWORKFLOW
+* | [EXC!] NO_AGENT_FOUND
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD validate_trigger_workflow.
+
+    DATA: lr_actions TYPE RANGE OF zwrkflow_act,
+          lsr_action LIKE LINE OF lr_actions.
+    DATA lv_pspid TYPE /rpm/tv_extid.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ABPSN_OUTPUT'
+      EXPORTING
+        input  = is_variationhead-pspid
+      IMPORTING
+        output = lv_pspid.
+    r_result = abap_false.
+
+
+
+*	Checking approvers by reading the “Project roles Table”
+*" Modern internal table population using VALUE operator with conditional logic
+    lr_actions = VALUE #(
+      sign   = 'I'
+      option = 'EQ'
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-endorser )
+      " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+      ( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+    ).
+    SELECT portfolioitem,
+            counter,
+            positionid,
+            rolename,
+            roleposition,
+            role,
+            roleadditionalresponsible,
+            decpointgovernancerole,
+            workflowaction,
+            workflowsequence,
+            variationsequence
+       FROM zi_ppm_projectroles
+       WHERE portfolioitem = @lv_pspid
+         AND workflowaction IN @lr_actions
+         AND positionid IS NOT INITIAL
+       INTO TABLE @DATA(lt_approvers).
+    IF sy-subrc <> 0.
+      MESSAGE e000(zppm_var) .
+      "RAISE no_agent_found.
+    ELSE.
+      IF iv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
+        SELECT *
+         FROM @lt_approvers AS approvers
+         WHERE variationsequence IS NOT INITIAL
+         INTO TABLE @DATA(lt_approver_inter).
+        IF sy-subrc <> 0.
+          MESSAGE e001(zppm_var).
+        ENDIF.
+
+      ELSEIF iv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+        SELECT *
+         FROM @lt_approvers AS approvers
+         WHERE workflowsequence IS NOT INITIAL
+         INTO TABLE @DATA(lt_approver_exter).
+        IF sy-subrc <> 0.
+          MESSAGE e002(zppm_var) .
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+*     Checking Variation cost exist
+    IF is_variationhead-estimated_costs <= 0.
+      MESSAGE e003(zppm_var) .
+    ENDIF.
+
+    r_result = abap_true.
+
+  ENDMETHOD.                                             "#EC CI_VALPAR
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->READ_NOVECO_EPM_VREJ
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_VAR_REJ_REAS                TYPE        NUMC2
+* | [<---] EV_VAR_REAS_DESC               TYPE        CHAR30
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD read_noveco_epm_vrej.
+    SELECT SINGLE  VarRejreasDesc
+      FROM zi_eppm_variation_rejs
+      INTO @DATA(lv_var_rej_reason)
+      WHERE  varrejreas = @iv_var_rej_reas.
+    IF sy-subrc IS INITIAL.
+      ev_var_reas_desc = COND #( WHEN lv_var_rej_reason IS NOT INITIAL THEN lv_var_rej_reason ).
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->READ_NOVECO_EPM_VRES
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_VAR_REAS                    TYPE        NUMC2
+* | [<---] EV_VAR_REAS_DESC               TYPE        CHAR30
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method READ_NOVECO_EPM_VRES.
+* Get Variation Reasons
+    SELECT SINGLE varreasdesc
+      FROM zi_eppm_variation_res INTO @DATA(lv_var_reas_desc)
+      WHERE  varreas = @iv_var_reas.
+    IF sy-subrc IS INITIAL.
+      ev_var_reas_desc = COND #( WHEN lv_var_reas_desc IS NOT INITIAL THEN lv_var_reas_desc ).
+    ENDIF.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->RESTART_APPROVAL
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method RESTART_APPROVAL.
+
+*----------------------------------------------------------------*
+*->Trigger Event to Restart Workflow
+*----------------------------------------------------------------*
+
+
+    IF mo_restart_event IS BOUND.
+      TRY.
+           mo_restart_event->raise( ).
+
+        CATCH cx_swf_evt_invalid_objtype
+              cx_swf_evt_invalid_event.
+
+      ENDTRY.
+    ENDIF.
+
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIATION_WF->VALID_VARIAT_TYPE_TRIGGER_WF
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_VARIATION_TYPE              TYPE        QMART
+* | [--->] IV_VAR_REASON                  TYPE        /NOVECO/VAR_REASON
+* | [<---] R_VARIATWFTYPE                 TYPE        ZDE_APPRV_PATH
+* | [<---] R_RESULT                       TYPE        BOOLE_D
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD valid_variat_type_trigger_wf.
+
+    SELECT  SINGLE VariationType, VarReason, WfTrigger, VariatWfType
+      INTO @DATA(ls_variat_conf)
+      FROM zi_ppm_variat_conf
+      WHERE VariationType = @iv_variation_type
+      AND varreason = @iv_var_reason
+      AND  WfTrigger = @abap_true.
+    IF sy-subrc IS INITIAL.
+      r_result = abap_true.
+      r_variatwftype = ls_variat_conf-variatwftype.
+    ELSE.
+      r_result = abap_false.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
