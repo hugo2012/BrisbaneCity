@@ -1,0 +1,211 @@
+  METHOD IF_SWF_FLEX_IFS_RUN_APPL~ON_RESTART_CALLBACK.
+*------------------------------------------------------------------------------------*
+*-->Clear the variable on Restart
+*------------------------------------------------------------------------------------*
+*--> Variables
+    DATA: lv_last_StepNumber      TYPE numc3,
+          lv_curr_workflow_action TYPE zwrkflow_act,
+          LV_CURR_WORKFLOW_ACTION_TEXT TYPE CHAR80,
+          LV_GOVENANCEROLE_TEXT TYPE CHAR80,
+          LV_ISLAST_APPROVAL TYPE BOOLE_D.
+    DATA: lv_wfinst_main    TYPE rpm_tv_guid,
+          lv_chk_crt_wfinst TYPE boole_d,
+          lv_step_uuid      TYPE rpm_tv_guid,
+          lr_actions        TYPE RANGE OF zwrkflow_act,
+          lsr_action        LIKE LINE OF lr_actions,
+          lv_variation_type TYPE QMART,
+          lv_portfolioitem TYPE /RPM/TV_EXTID.
+
+*------------------------------------------------------------------------------------*
+    TEST-SEAM container_object.
+      DATA(lo_container) = io_context->get_workflow_container( ).
+    END-TEST-SEAM.
+
+    IF lo_container IS BOUND.
+      Try.
+* Get Variation type
+*-->VARIATION_TYPE
+          lo_container->get(
+            EXPORTING
+              name       = 'VARIATION_TYPE'
+            IMPORTING
+              value      = lv_variation_type
+          ).
+
+* Get portfolio item
+*lv_iv_portfolioitem
+
+          lo_container->get(
+            EXPORTING
+              name       = 'PORTFOLIOITEM'
+            IMPORTING
+              value      = lv_portfolioitem
+          ).
+    CATCH cx_swf_cnt_cont_access_denied. " Changed Access Not Allowed
+        CATCH cx_swf_cnt_elem_access_denied. " Value/Unit Must Not Be Changed
+        CATCH cx_swf_cnt_elem_not_found.     " Element Not in the Container
+        CATCH cx_swf_cnt_elem_type_conflict. " Type Conflict Between Value and Current Parameter
+        CATCH cx_swf_cnt_unit_type_conflict. " Type Conflict Between Unit and Current Parameter
+        CATCH cx_swf_cnt_elem_def_invalid.   " Element Definition Is Invalid (Internal Error)
+        CATCH cx_swf_cnt_container.          " Exception in the Container Service
+
+      ENDTRY.
+          lv_chk_crt_wfinst = abap_true.
+
+*       Get the first step number instead of using the Iv_stepnumber.
+
+          " Modern internal table population using VALUE operator with conditional logic
+          lr_actions = VALUE #(
+            sign   = 'I'
+            option = 'EQ'
+            ( low =  zif_ppm_variation_wf_c=>c_workflow_action-endorser )
+            " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
+            ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+            ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+            "( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+          ).
+
+          IF lv_variation_type = 'Z4'."Internal
+
+            DATA(lv_wf_path) = '01'.
+            " read project role.
+            SELECT portfolioitem,
+              counter,
+              positionid,
+              rolename,
+              roleposition,
+              role,
+              roleadditionalresponsible,
+              decpointgovernancerole,
+              workflowaction,
+              workflowsequence,
+              variationsequence
+             FROM zi_ppm_projectroles
+           WHERE portfolioitem = @lv_portfolioitem
+            AND workflowaction IN @lr_actions
+            AND positionid IS NOT INITIAL
+            AND variationsequence IS NOT INITIAL
+           ORDER BY variationsequence  ASCENDING
+           INTO TABLE @DATA(lt_proj_roles).
+            IF sy-subrc IS INITIAL.
+              "DATA(lv_total_steps) = lines( lt_proj_roles ).
+              DATA(ls_proj_roles) = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
+              DATA(lv_step_number_first) =  ls_proj_roles-variationsequence.
+              DATA(lv_workflow_seq_var)      = lv_step_number_first.
+            ENDIF.
+            DATA(lv_total_steps) = lines( lt_proj_roles ).
+            " DATA(lv_wf_path) = '01'.
+          ELSEIF lv_variation_type = 'Z1' OR lv_variation_type = 'Z2' OR lv_variation_type = 'R1'
+          OR lv_variation_type = 'R2'."External
+            SELECT portfolioitem,
+                  counter,
+                  positionid,
+                  rolename,
+                  roleposition,
+                  role,
+                  roleadditionalresponsible,
+                  decpointgovernancerole,
+                  workflowaction,
+                  workflowsequence,
+                  variationsequence
+              FROM zi_ppm_projectroles
+            WHERE portfolioitem = @lv_portfolioitem
+              AND workflowaction IN @lr_actions
+             AND positionid IS NOT INITIAL
+             AND workflowsequence IS NOT INITIAL
+            ORDER BY workflowsequence ASCENDING
+              INTO TABLE @lt_proj_roles.
+            IF sy-subrc IS INITIAL.
+              "lv_total_steps = lines( lt_proj_roles ).
+              ls_proj_roles = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
+              lv_step_number_first =  ls_proj_roles-workflowsequence.
+              DATA(lv_workflow_seq)      = lv_step_number_first.
+            ENDIF.
+            lv_total_steps = lines( lt_proj_roles ).
+            lv_wf_path = '02'.
+          ENDIF.
+
+      TRY.
+*-->StepNumber
+          lo_container->get(
+            EXPORTING
+              name       = 'StepNumber'
+            IMPORTING
+              value      = lv_last_StepNumber
+          ).
+
+          lv_last_StepNumber = lv_step_number_first.
+          lo_container->set(
+            EXPORTING
+              name       = 'StepNumber'
+              value      = lv_step_number_first
+          ).
+*-->Fetch LV_CURR_WORKFLOW_ACTION
+          lo_container->get(
+            EXPORTING
+              name       = 'CURR_WORKFLOW_ACTION'
+            IMPORTING
+              value      = lv_curr_workflow_action
+          ).
+
+           lv_curr_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+
+          lo_container->set(
+            EXPORTING
+              name       = 'CURR_WORKFLOW_ACTION'
+              value      = lv_curr_workflow_action
+          ).
+
+*--> CURR_WORKFLOW_ACTION_TEXT
+          lo_container->get(
+            EXPORTING
+              name       = 'CURR_WORKFLOW_ACTION_TEXT'
+              IMPORTING
+              value      = LV_CURR_WORKFLOW_ACTION_TEXT  ).
+
+*-->set CURR_WORKFLOW_ACTION_TEXT
+          LV_CURR_WORKFLOW_ACTION_TEXT   = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser.
+          lo_container->set(
+             EXPORTING name  = 'CURR_WORKFLOW_ACTION_TEXT'
+                       value = LV_CURR_WORKFLOW_ACTION_TEXT ).
+
+*-->Fecth LV_GOVENANCEROLE_TEXT - GOVERNANCEROLE_TEXT
+
+          lo_container->get(
+            EXPORTING
+              name       = 'GOVERNANCEROLE_TEXT'
+              IMPORTING
+              value      = LV_GOVENANCEROLE_TEXT  ).
+
+*-->Clear LV_GOVENANCEROLE_TEXT
+          LV_GOVENANCEROLE_TEXT =  zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser.
+          lo_container->set(
+             EXPORTING name  = 'GOVERNANCEROLE_TEXT'
+                       value = LV_GOVENANCEROLE_TEXT  ).
+
+*-->Clear LV_ISLAST_APPROVAL
+          lo_container->set(
+            EXPORTING
+              name       = 'ISLAST_APPROVAL'
+              value      = LV_ISLAST_APPROVAL  ).
+
+*-->Clear LV_ISLAST_APPROVAL
+          CLEAR LV_ISLAST_APPROVAL.
+          lo_container->set(
+             EXPORTING name  = 'ISLAST_APPROVAL'
+                       value = LV_ISLAST_APPROVAL  ).
+
+        CATCH cx_swf_cnt_cont_access_denied. " Changed Access Not Allowed
+        CATCH cx_swf_cnt_elem_access_denied. " Value/Unit Must Not Be Changed
+        CATCH cx_swf_cnt_elem_not_found.     " Element Not in the Container
+        CATCH cx_swf_cnt_elem_type_conflict. " Type Conflict Between Value and Current Parameter
+        CATCH cx_swf_cnt_unit_type_conflict. " Type Conflict Between Unit and Current Parameter
+        CATCH cx_swf_cnt_elem_def_invalid.   " Element Definition Is Invalid (Internal Error)
+        CATCH cx_swf_cnt_container.          " Exception in the Container Service
+
+
+      ENDTRY.
+    ENDIF.
+
+
+  ENDMETHOD.
