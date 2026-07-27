@@ -1,0 +1,140 @@
+FUNCTION ZPPM_FM_RAISE_VARIAT_WF.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(I_OBJECT) TYPE  JSTO OPTIONAL
+*"     REFERENCE(OBJTYPE) TYPE  SWO_OBJTYP OPTIONAL
+*"     REFERENCE(EVENT) TYPE  SWO_EVENT OPTIONAL
+*"     REFERENCE(OBJKEY) TYPE  SWE_OBJSTR OPTIONAL
+*"  EXPORTING
+*"     REFERENCE(NEW_OBJTYPE) TYPE  SWO_OBJTYP
+*"     REFERENCE(NEW_EVENT) TYPE  SWO_EVENT
+*"     REFERENCE(NEW_OBJKEY) TYPE  SWO_OBJID
+*"  TABLES
+*"      OBJSTATUS STRUCTURE  BSVOBJSTA OPTIONAL
+*"      ET_EVENTS STRUCTURE  BSVEVENT OPTIONAL
+*"      EVENT_CONTAINER STRUCTURE  SWCONT OPTIONAL
+*"----------------------------------------------------------------------
+*----------------------------------------------------------------------*
+*Created by: Huy Tran - 117001
+*TEAM : TAMS
+*----------------------------------------------------------------------*
+* Purpose:  Trigger Variation Workflow.
+* Description: Check User status update Enhancement
+* Reason:  Trigger SAP Variation workflow
+* TR:
+*----------------------------------------------------------------------*
+    DATA:   BEGIN OF lt_jest_buf OCCURS 1000. "Einzelstatus-Puffer
+            INCLUDE STRUCTURE jest_upd.
+    DATA:     mod,
+             inact_old LIKE jest-inact.
+    DATA:   END OF lt_jest_buf.
+   " DATA: lt_jest_buf LIKE LINE OF lt_jest_buf1.
+    DATA: lv_user_status_code TYPE usrsts.
+    DATA: lv_pspid    TYPE /rpm/tv_extid.
+    DATA: lv_wf_triggered TYPE abap_bool.
+    DATA: lt_status TYPE TABLE OF jstat,
+      lv_objnr  TYPE j_objnr.
+    "DATA: gs_qmel TYPE /noveco/evm_qmel.
+    FIELD-SYMBOLS: <fs_status>          TYPE any,
+                   <fs_qmel>           TYPE any,
+                   <fs_jest_buf>      TYPE any table.
+    DATA: ls_qmel          TYPE /noveco/evm_qmel,
+          ls_variationhead TYPE /noveco/var_head.
+    DATA: lv_status_jest TYPE j_status,
+      lv_status_jest_crt TYPE j_status.
+    IF sy-tcode = '/NOVECO/EVM'.
+
+      ASSIGN ('(/NOVECO/EVM_WORKBENCH)GS_QMEL-USER_STATUS_CODE') TO <fs_status>.
+      ASSIGN ('(/NOVECO/EVM_WORKBENCH)GS_QMEL') TO <fs_qmel> .
+      ASSIGN ('(SAPLBSVA)JEST_BUF[]') TO <fs_jest_buf>  .
+      IF <fs_status> IS ASSIGNED AND <fs_status> IS NOT INITIAL AND <fs_qmel> IS ASSIGNED AND <fs_qmel> IS NOT INITIAL
+        AND <fs_jest_buf> IS ASSIGNED AND <fs_jest_buf> IS NOT INITIAL.
+        ls_qmel = <fs_qmel>.
+        lv_user_status_code = <fs_status>.
+        lv_objnr = ls_qmel-objnr.
+        " Read directly from the assigned field symbol table
+        LOOP AT <fs_jest_buf> ASSIGNING FIELD-SYMBOL(<ls_jest_line>).
+          ASSIGN COMPONENT 'STAT' OF STRUCTURE <ls_jest_line> TO FIELD-SYMBOL(<lv_stat>).
+          ASSIGN COMPONENT 'INACT' OF STRUCTURE <ls_jest_line> TO FIELD-SYMBOL(<lv_inact>).
+          ASSIGN COMPONENT 'OBJNR' OF STRUCTURE <ls_jest_line> TO FIELD-SYMBOL(<lv_objnr>).
+          IF <lv_stat> IS ASSIGNED AND <lv_stat> = 'E0002' AND <lv_objnr> IS ASSIGNED AND <lv_objnr> =  lv_objnr
+             AND <lv_inact> IS ASSIGNED AND <lv_inact> = space.
+            lv_status_jest = <lv_stat>.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+        IF <ls_jest_line> IS ASSIGNED.
+          UNASSIGN <ls_jest_line>.
+        ENDIF.
+         LOOP AT <fs_jest_buf> ASSIGNING <ls_jest_line>.
+          ASSIGN COMPONENT 'STAT' OF STRUCTURE <ls_jest_line> TO <lv_stat>.
+          ASSIGN COMPONENT 'INACT' OF STRUCTURE <ls_jest_line> TO <lv_inact>.
+          ASSIGN COMPONENT 'OBJNR' OF STRUCTURE <ls_jest_line> TO <lv_objnr>.
+          IF <lv_stat> IS ASSIGNED AND <lv_stat> = 'E0001'AND <lv_objnr> IS ASSIGNED AND <lv_objnr> =  lv_objnr
+             AND <lv_inact> IS ASSIGNED AND <lv_inact> = abap_true.
+             lv_status_jest_crt = <lv_stat>.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+        IF lv_status_jest IS NOT INITIAL.
+          IF lv_status_jest_crt IS INITIAL.
+            Clear lv_status_jest.
+          ENDIF.
+        ENDIF.
+
+        CALL FUNCTION 'STATUS_READ'
+          EXPORTING
+            objnr            = lv_objnr
+            only_active      = 'X'
+          TABLES
+            status           = lt_status
+          EXCEPTIONS
+            object_not_found = 1
+            OTHERS           = 2.
+
+        IF sy-subrc = 0.
+          " Read user status starting with 'E'
+          READ TABLE lt_status ASSIGNING FIELD-SYMBOL(<ls_stat>) WITH KEY stat = 'E0002'.
+          IF sy-subrc = 0.
+            IF <ls_stat>-inact = ''.
+               DATA(lv_status_code_buf) = <ls_stat>-stat.
+            ENDIF.
+
+          ENDIF.
+        ENDIF.
+
+        IF lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_pending
+          OR lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_active.
+          IF lv_status_jest = lv_status_code_buf .
+             DATA(lo_cl_ppm_wf) = NEW zcl_ppm_variation_wf( ).
+            IF ls_qmel IS NOT INITIAL.
+              " WAIT UP TO 1 SECONDS.
+              " 1. Check if the flag was already set in memory for this notification/object
+              IMPORT lv_wf_triggered = lv_wf_triggered
+                FROM MEMORY ID 'ZPPM_WF_TRIGGERED'.
+               IF lv_wf_triggered = abap_true.
+              " Workflow already triggered in this session — exit early!
+                 RETURN.
+               ENDIF.
+                CALL METHOD lo_cl_ppm_wf->raise_submit_approval_workflow
+                 EXPORTING
+                   is_evm_qmel = ls_qmel
+                 IMPORTING
+                   r_result    = DATA(lv_r_result).
+*
+*                " 3. Mark in ABAP memory that workflow has been triggered
+*                lv_wf_triggered = abap_true.
+*                EXPORT lv_wf_triggered = lv_wf_triggered
+*                  TO MEMORY ID 'ZPPM_WF_TRIGGERED'.
+            ENDIF.
+          ENDIF.
+
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+
+
+
+ENDFUNCTION.
