@@ -1,0 +1,39 @@
+  METHOD if_ex_iwon_notification~extensionout_notif.
+*----------------------------------------------------------------------*
+*Created by: Huy Tran - 117001
+*TEAM : TAMS
+*----------------------------------------------------------------------*
+* Purpose:  Trigger Variation Workflow.
+* Description: Check User status update Enhancement
+* Reason:  Trigger SAP Variation workflow
+* TR:
+*----------------------------------------------------------------------*
+    DATA: lv_user_status_code TYPE usrsts.
+    DATA: lv_pspid    TYPE /rpm/tv_extid.
+    DATA: lv_wf_triggered TYPE abap_bool.
+    "DATA: gs_qmel TYPE /noveco/evm_qmel.
+    FIELD-SYMBOLS: <fs_status>          TYPE any,
+                   <fs_qmel>           TYPE any.
+    DATA: ls_qmel          TYPE /noveco/evm_qmel,
+          ls_variationhead TYPE /noveco/var_head.
+    IF sy-tcode = '/NOVECO/EVM'.
+      ASSIGN ('(/NOVECO/EVM_WORKBENCH)GS_QMEL-USER_STATUS_CODE') TO <fs_status>.
+      ASSIGN ('(/NOVECO/EVM_WORKBENCH)GS_QMEL') TO <fs_qmel> .
+      IF <fs_status> IS ASSIGNED AND <fs_status> IS NOT INITIAL AND <fs_qmel> IS ASSIGNED AND <fs_qmel> IS NOT INITIAL.
+        ls_qmel = <fs_qmel>.
+        lv_user_status_code = <fs_status>.
+        IF lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_pending
+          OR lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_active.
+          DATA(lo_cl_ppm_wf) = NEW zcl_ppm_variation_wf( ).
+          IF ls_qmel IS NOT INITIAL.
+           " 1. Check if the flag was already set in memory for this notification/object
+            IMPORT lv_wf_triggered = lv_wf_triggered
+              FROM MEMORY ID 'ZPPM_WF_TRIGGERED'.
+             IF lv_wf_triggered = abap_true.
+              FREE MEMORY ID 'ZPPM_WF_TRIGGERED'.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
