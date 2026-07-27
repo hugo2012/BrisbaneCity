@@ -32,6 +32,21 @@ In backend
 
 <img width="1857" height="803" alt="image" src="https://github.com/user-attachments/assets/2756c10b-f486-466d-b8bc-1d3c09881f23" />
 
+Class handle runtime data when user clicking Request more information in frontend. to perform restart workflow.
+
+<img width="1466" height="733" alt="image" src="https://github.com/user-attachments/assets/cd404274-2ce1-4af2-982f-54dafb64113f" />
+
+<img width="1466" height="756" alt="image" src="https://github.com/user-attachments/assets/f4537c06-5c10-4f15-a8cd-43e81eb14ea1" />
+
+Handle reminder email
+<img width="1579" height="765" alt="image" src="https://github.com/user-attachments/assets/634c829b-a471-46b5-b0e9-099e07218d52" />
+
+On Restart workflow - > Reset Variaable containter element
+
+<img width="1625" height="787" alt="image" src="https://github.com/user-attachments/assets/b3cce02f-aece-473b-ae2a-7b481b35f7f6" />
+
+
+
 Config binding event change user status for notification in tcode BSVW
 
 <img width="1110" height="426" alt="image" src="https://github.com/user-attachments/assets/f80e1326-54b9-403a-911b-302e2d6e1fde" />
