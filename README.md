@@ -32,6 +32,11 @@ In backend
 
 <img width="1857" height="803" alt="image" src="https://github.com/user-attachments/assets/2756c10b-f486-466d-b8bc-1d3c09881f23" />
 
+Config binding event change user status for notification in tcode BSVW
+
+<img width="1110" height="426" alt="image" src="https://github.com/user-attachments/assets/f80e1326-54b9-403a-911b-302e2d6e1fde" />
+
+
 
 
 
