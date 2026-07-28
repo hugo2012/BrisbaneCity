@@ -1,0 +1,120 @@
+class ZCL_PPM_DECISION_POINT definition
+  public
+  final
+  create public .
+
+public section.
+
+  interfaces IF_BADI_INTERFACE .
+  interfaces /RPM/IF_EX_DECISION_POINT .
+protected section.
+private section.
+ENDCLASS.
+
+CLASS ZCL_PPM_DECISION_POINT IMPLEMENTATION.
+
+    METHOD /RPM/IF_EX_DECISION_POINT~ON_COMMIT_CHANGES.
+
+            CONSTANTS:  BEGIN OF c_dp_status,
+                ready_for_decision TYPE char5 VALUE 'ZDP03',
+            END OF c_dp_status.
+
+            CONSTANTS:  BEGIN OF c_flow_status,
+                     approval_pending   TYPE numc5 VALUE '00000',
+            END OF c_flow_status.
+
+            DATA properties TYPE DPR_TT_NAME_VALUE_PAIR_BADI.
+
+        IF iv_state = 'C' AND
+           is_attributes_new-active = 'X' AND
+           is_attributes_new-status IS NOT INITIAL AND
+           is_attributes_new-status NE is_attributes_old-status.
+
+            IF is_attributes_new-status = c_dp_status-ready_for_decision.
+                "start approval workflow, first read details of portfolio item
+                SELECT SINGLE ProjectPortfolioItemUUID, ProjectPortfolioItem, ProjectPortfolioItemType, ProjPrtfloItmTextEN
+                FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+                WHERE ProjectPortfolioItemUUID = @is_attributes_new-item_guid
+                INTO @DATA(item).
+
+                "read details of decision point
+                SELECT SINGLE ProjPrtfloItmDcsnPointUUID, ProjPrtfloItemDecisionPoint, ProjPrtfloItmDcsnPtTextEN
+                FROM ZI_ProjPrtfloItmDcsnPointBasic WITH PRIVILEGED ACCESS
+                WHERE ProjPrtfloItmDcsnPointUUID = @is_attributes_new-guid
+                INTO @DATA(dec_point).
+
+                TRY.
+                    "convert the uuids to external format
+                    DATA: uuid_dec_point TYPE SYSUUID_C36,
+                          uuid_item TYPE SYSUUID_C36.
+                    CL_SYSTEM_UUID=>convert_uuid_x16_static( EXPORTING uuid = dec_point-ProjPrtfloItmDcsnPointUUID
+                                                             IMPORTING uuid_c36 = uuid_dec_point ).
+                    CL_SYSTEM_UUID=>convert_uuid_x16_static( EXPORTING uuid = item-ProjectPortfolioItemUUID
+                                                             IMPORTING uuid_c36 = uuid_item ).
+
+                    properties = VALUE #(
+                                     ( name = 'dp_id'   value = dec_point-ProjPrtfloItemDecisionPoint )
+                                     ( name = 'dp_desc' value = dec_point-ProjPrtfloItmDcsnPtTextEN )
+                                     ( name = 'dp_uuid' value = uuid_dec_point )
+                                     ( name = 'pi_id'   value = item-ProjectPortfolioItem )
+                                     ( name = 'pi_desc' value = item-ProjPrtfloItmTextEN )
+                                     ( name = 'pi_uuid' value = uuid_item )
+                                     ( name = 'pi_type' value = item-ProjectPortfolioItemType )
+                                     ( name = 'changed_by' value = is_attributes_new-changed_by )
+                                 ).
+
+                    ZCL_BPA_API_WRAPPER=>START_PROCESS( EXPORTING I_ENVIRONMENT_ID = 'bcc'
+                                                                  I_DEFINITIONID = 'decisionpointapproval.decisionPointMain'
+                                                                  IT_PROPERTIES = properties ).
+                 CATCH cx_root.
+                ENDTRY.
+            ELSE.
+               "check for an in-progress workflow for this DP
+               SELECT WfinstAppr FROM zi_ppm_decpnt_appr
+                                 INTO TABLE @DATA(flows)
+                                 WHERE DecisionGuID = @is_attributes_new-guid AND
+                                       Status = @c_flow_status-approval_pending.
+               IF sy-subrc = 0.
+                    "we must cancel these (approval) workflow(s) using the trigger (we only expect one)
+                    LOOP AT flows INTO DATA(flow).
+                        "convert the guid to external format
+                        TRY.
+                         DATA instance_id TYPE SYSUUID_C36.
+                         CL_SYSTEM_UUID=>convert_uuid_x16_static( EXPORTING uuid = flow-WfinstAppr
+                                                                  IMPORTING uuid_c36 = instance_id ).
+                         properties =   VALUE #(
+                                            ( name = 'changed_by' value = is_attributes_new-changed_by )
+                                        ).
+                         ZCL_BPA_API_WRAPPER=>TRIGGER(
+                             EXPORTING I_INSTANCE_ID = instance_id
+                                       I_TRIGGER_ID = 'decisionpointapproval.statusChangedFromReadyForDecision'
+                                       IT_PROPERTIES = properties ).
+                          CATCH cx_root.
+                        ENDTRY.
+                    ENDLOOP.
+               ENDIF.
+            ENDIF.
+        ENDIF.
+    ENDMETHOD.
+
+  METHOD /RPM/IF_EX_DECISION_POINT~AFTER_MODIFY.
+
+  ENDMETHOD.
+
+  METHOD /RPM/IF_EX_DECISION_POINT~ATTRIBUTE_MODIFY.
+
+  ENDMETHOD.
+
+  METHOD /RPM/IF_EX_DECISION_POINT~BEFORE_MODIFY.
+
+  ENDMETHOD.
+
+  METHOD /RPM/IF_EX_DECISION_POINT~GET_ATTRIBUTES.
+
+  ENDMETHOD.
+
+  METHOD /RPM/IF_EX_DECISION_POINT~PREPARE_TO_SAVE.
+
+  ENDMETHOD.
+
+ENDCLASS.
