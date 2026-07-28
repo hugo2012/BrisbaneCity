@@ -1,0 +1,10 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Portfolio Item Type Text'
+@Metadata.ignorePropagatedAnnotations: true
+define view entity ZI_PROJPORTFOLIOITEMTYPETEXT as select from /rpm/item_type_t
+{
+    key langu as Langu,
+    key item_type as ItemType,
+    item_type_t as ItemTypeT
+} where langu = $session.system_language
