@@ -1,0 +1,5 @@
+@EndUserText.label: 'Service defn for ZC_PPM_DECPNT_APPR'
+define service ZI_PPM_DECPNT_APPR {
+  expose ZC_PPM_DECPNT_APPR;
+  expose ZC_PPM_DECPNT_STEP;
+}
