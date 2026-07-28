@@ -1,0 +1,87 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Workforce Person Details'
+define view entity ZI_WORKFORCEPERSON_DP
+  as select from I_BusinessPartner        as BP
+    inner join   I_HrRelation             as relt           on  BP.BusinessPartner              = relt.HumRsceRelatedObjectId
+                                                            and relt.ObjectType                 = 'CP' //CP - Central person
+                                                            and relt.HumRsceRelshpSpecification = 'B'
+                                                            and relt.HumRsceRelationship        = '207' //207    Is identical to
+                                                            and relt.RelatedObjectType          = 'BP'
+                                                            and relt.EndDate                    = '99991231'
+
+    inner join   P_WFPersonIdentification as PersIdentifier on BP.BusinessPartner = PersIdentifier.BusinessPartner
+  association [1..1] to I_BusinessPartner         as _BusinessPartner            on $projection.Person = _BusinessPartner.BusinessPartner
+  association [0..*] to I_ServicePerformerToSuplr as _ServicePerformerToSupplier on $projection.Person = _ServicePerformerToSupplier.Person
+  association [1..*] to I_PersonWorkAgreement     as _PersonWorkAgreement        on $projection.Person = _PersonWorkAgreement.Person
+  association [1..*] to I_PersonWorkAgreement_1   as _PersonWorkAgreement_1      on $projection.Person = _PersonWorkAgreement_1.Person
+  association [0..1] to I_WorkplaceAddress        as _WorkplaceAddress           on $projection.BusinessPartnerUUID = _WorkplaceAddress.BusinessPartnerUUID
+  association [0..*] to I_BusinessPartnerToBPRole as _BusinessPartnerToBPRole    on $projection.Person = _BusinessPartnerToBPRole.BusinessPartner
+  association [0..1] to I_BusinessUser            as _BusinessUser               on $projection.Person = _BusinessUser.BusinessPartner
+  association [0..1] to I_BusinessUserBasic       as _BusinessUserBasic          on $projection.Person = _BusinessUserBasic.BusinessPartner
+  
+{
+  key BP.BusinessPartner                      as Person,
+      PersIdentifier.BPIdentificationNumber   as PersonExternalID,
+      BP.FirstName,
+      BP.LastName,
+      BP.MiddleName,
+      BP.AdditionalLastName,
+      @Semantics.text: true
+      BP.PersonFullName,
+      BP.BusinessPartnerUUID,
+      BP.AuthorizationGroup,
+      BP.IsBusinessPurposeCompleted,
+      
+  /////// Start of Datacontroller 10+1 fields -  Not to be consumed by any other views//////////      
+        
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataControllerSet,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController1,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController2,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController3,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController4,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController5,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController6,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController7,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController8,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController9,
+      @Consumption.hidden:true
+      @UI.hidden:true
+      BP.DataController10,
+        
+ ////////////// End of Datacontroller 10+1 fields////////// 
+      _BusinessPartner,
+      _ServicePerformerToSupplier,
+       @API.element.releaseState: #DEPRECATED
+       @API.element.successor: '_PersonWorkAgreement_1'
+      _PersonWorkAgreement,
+      _PersonWorkAgreement_1,
+      _WorkplaceAddress,
+      _BusinessPartnerToBPRole,
+       @API.element.releaseState: #DEPRECATED
+       @API.element.successor: '_BusinessUserBasic'      
+      _BusinessUser,
+      _BusinessUserBasic
+}
+where
+  BP.BusinessPartnerCategory = '1'
