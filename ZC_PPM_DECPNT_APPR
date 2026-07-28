@@ -1,0 +1,34 @@
+projection;
+strict ( 2 );
+
+define behavior for ZC_PPM_DECPNT_APPR
+
+{
+  use create;
+  use update;
+  use function getPortfolioItemURL;
+  use function getStakeholders external 'getStakeholders';
+  use function getConfigErrorDetails external 'getConfigErrorDetails';
+  use function getProjectManagers external 'getProjectManagers';
+  use function getBusinessSupport external 'getBusinessSupport';
+  use function getDPManagers external 'getDPManagers';
+  use action buildNextStep external 'nextStep';
+  use action approvalCompleted external 'approvalCompleted';
+  use action cancelled external 'flowCancelled';
+  use action itemStatusSet external 'portfolioItemStatusSet';
+  use action decPntStatusSet external 'decisionPointStatusSet';
+  use association _Steps;
+}
+
+define behavior for ZC_PPM_DECPNT_STEP
+
+{
+  use update;
+  use action approve            external 'approveStep';
+  use action endorse            external 'endorseStep';
+  use action reject             external 'rejectStep';
+  use action requestMoreInfo    external 'requestMoreInfoStep';
+  use action putOnHold          external 'putOnHoldStep';
+
+  use association _Header;
+}
