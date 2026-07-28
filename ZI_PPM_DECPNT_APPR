@@ -1,0 +1,117 @@
+managed implementation in class ZBP_PPM_DECPNT_APPR unique;
+strict ( 2 );
+
+define behavior for ZI_PPM_DECPNT_APPR
+persistent table zppm_decpnt_appr
+lock master
+authorization master( global )
+
+{
+  field ( mandatory : create, readonly : update )
+   WfinstMain,
+   InitiatedByUser;
+
+  field ( readonly )
+   LocalCreatedBy,
+   LocalCreatedAt,
+   LastChangedAt,
+   LocalLastChangedAt,
+   LocalLastChangedBy;
+
+  create;
+  update;
+  delete;
+
+  function getPortfolioItemURL result [1] ZA_PPM_DECPNT_URL;
+  function getStakeholders result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+  function getConfigErrorDetails result [1] ZA_PPM_DEC_PNT_CONFIG_ERROR;
+  function getRoleHolders parameter ZA_PPM_DECPNT_PROJROLE result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+  function getProjectManagers result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+  function getBusinessSupport result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+  function getActionParties parameter ZA_PPM_DECPNT_WFACTION result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+  function getDPManagers result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+  internal static function getHolders parameter ZA_PPM_DECPNT_POSITION result [0..*] ZA_PPM_DEC_PNT_STAKEHOLDER;
+
+  action (authorization: none) buildNextStep result [1] ZA_PPM_DEC_PNT_NEXT_STEP;
+  action (authorization: none) approvalCompleted;
+  action (authorization: none) cancelled parameter ZA_PPM_DECPNT_USER;
+  action (authorization: none) itemStatusSet result [1] ZA_PPM_STATUS_SET;
+  action (authorization: none) decPntStatusSet result [1] ZA_PPM_STATUS_SET;
+
+  internal action (authorization: none) setFlowStatus parameter ZA_PPM_DECPNT_NEW_STATUS;
+
+  association _Steps { create; }
+
+  mapping for ZPPM_DECPNT_APPR
+  {
+    WfinstMain = wfinst_main;
+    WfinstAppr = wfinst_appr;
+    DecisionGuID = decision_guid;
+    ItemGuID = item_guid;
+    Status = status;
+    InvestmentApprovalRequired = invest_app_req;
+    InitiatedByUser = initiated_by;
+    CurrentStepUUID = current_step_uuid;
+    FinalStepUUID = final_step_uuid;
+    LocalCreatedBy = local_created_by;
+    LocalCreatedAt = local_created_at;
+    LocalLastChangedBy = local_last_changed_by;
+    LocalLastChangedAt = local_last_changed_at;
+    LastChangedAt = last_changed_at;
+  }
+}
+
+define behavior for ZI_PPM_DECPNT_STEP alias Step
+persistent table zppm_decpnt_step
+lock dependent by _Header
+authorization dependent by _Header
+
+{
+
+  field ( readonly, numbering : managed ) StepUUID;
+
+  field ( readonly )
+   WfinstMain,
+   Counter,
+   PositionID,
+   ProcessorEmail,
+   LocalCreatedAt,
+   LocalCreatedBy,
+   LastChangedAt,
+   LocalLastChangedAt,
+   LocalLastChangedBy;
+
+
+  update;
+  delete;
+
+  action (authorization: none) approve          parameter ZA_PPM_DECPNT_USER_TASK;
+  action (authorization: none) endorse          parameter ZA_PPM_DECPNT_USER_TASK;
+  action (authorization: none) reject           parameter ZA_PPM_DECPNT_USER_TASK;
+  action (authorization: none) requestMoreInfo  parameter ZA_PPM_DECPNT_USER_TASK;
+  action (authorization: none) putOnHold        parameter ZA_PPM_DECPNT_USER_TASK;
+
+  internal action (authorization: none) record_decision parameter ZA_PPM_DECPNT_RECDEC;
+  association _Header { }
+
+  mapping for ZPPM_DECPNT_STEP
+  {
+    StepUUID   = step_uuid;
+    WfinstMain = wfinst_main;
+    Counter = counter;
+    Status = status;
+    Note = note;
+    MessageText = message;
+    WorkflowSequence = workflow_seq;
+    WorkflowAction = workflow_action;
+    GovernanceRole = govern_role;
+    PositionID = position_id;
+    HolderSummary = holder_summary;
+    ProcessorEmail = processed_by;
+    LocalCreatedBy = local_created_by;
+    LocalCreatedAt = local_created_at;
+    LocalLastChangedBy = local_last_changed_by;
+    LocalLastChangedAt = local_last_changed_at;
+    LastChangedAt = last_changed_at;
+  }
+}
