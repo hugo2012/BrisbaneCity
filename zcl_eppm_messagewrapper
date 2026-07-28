@@ -1,0 +1,203 @@
+CLASS zcl_eppm_messagewrapper DEFINITION
+  PUBLIC
+  INHERITING FROM cx_static_check
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_abap_behv_message .
+
+    CONSTANTS:
+      GC_MSGID TYPE SYMSGID VALUE 'ZEPPM',
+
+      BEGIN OF ERROR_PORTFOLIO_ITEM_READ,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '004',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_ITEM_GUID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_SUBRC',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_PORTFOLIO_ITEM_READ,
+
+      BEGIN OF ERROR_MAIN_WF_READ,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '005',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_MAIN_WF_GUID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_MAIN_WF_READ,
+
+      BEGIN OF ERROR_MAIN_WF_READ_CREATED_BY,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '006',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_MAIN_WF_GUID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_SUBRC',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_MAIN_WF_READ_CREATED_BY,
+
+      BEGIN OF ERROR_READ_USER_EMAIL,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '007',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_USERID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_SUBRC',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_READ_USER_EMAIL,
+
+      BEGIN OF ERROR_USER_EMAIL_BLANK,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '008',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_USERID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_USER_EMAIL_BLANK,
+
+      BEGIN OF ERROR_NO_BUS_SUPPORT,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '009',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_MAIN_WF_GUID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_NO_BUS_SUPPORT,
+
+      BEGIN OF ERROR_READ_LATEST_STEP,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '010',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_CAUSE',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_MAIN_WF_GUID',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_READ_LATEST_STEP,
+
+      BEGIN OF ERROR_UPD_FLOW_HDR,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '011',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_CAUSE',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_MAIN_WF_GUID',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_UPD_FLOW_HDR,
+
+      BEGIN OF ERROR_READ_DP_HDR,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '012',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_SUBRC',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_DP_GUID',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_READ_DP_HDR,
+
+      BEGIN OF ERROR_EMPTY_POS,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '013',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_POSID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_EMPTY_POS,
+
+      BEGIN OF ERROR_READ_WORKFORCE,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '014',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_SUBRC',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_COUNT',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_READ_WORKFORCE,
+
+      BEGIN OF ERROR_READ_EMAIL,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '015',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_SUBRC',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'MV_COUNT',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_READ_EMAIL,
+
+      BEGIN OF ERROR_READ_EMAIL_BP,
+        MSGID TYPE SYMSGID VALUE 'ZEPPM',
+        MSGNO TYPE SYMSGNO VALUE '016',
+        ATTR1 TYPE SCX_ATTRNAME VALUE 'MV_BP_GUID',
+        ATTR2 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR3 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+        ATTR4 TYPE SCX_ATTRNAME VALUE 'Message_Variable',
+      END OF ERROR_READ_EMAIL_BP.
+
+    DATA:   MV_ATTR1         TYPE STRING,
+            MV_ATTR2         TYPE STRING,
+            MV_ATTR3         TYPE STRING,
+            MV_ATTR4         TYPE STRING,
+            MV_MAIN_WF_GUID  TYPE rpm_tv_guid,
+            MV_ITEM_GUID     TYPE rpm_tv_guid,
+            MV_DP_GUID       TYPE rpm_tv_guid,
+            MV_BP_GUID       TYPE rpm_tv_guid,
+            MV_SUBRC         TYPE i,
+            MV_USERID        TYPE abp_creation_user,
+            MV_ITEM_EXTID    TYPE /RPM/TV_EXTID,
+            MV_CAUSE         TYPE IF_ABAP_BEHV=>T_FAIL_CAUSE,
+            MV_POSID         TYPE zpos_id,
+            MV_COUNT         TYPE i.
+
+    METHODS constructor
+      IMPORTING
+        !textid         LIKE if_t100_message=>t100key OPTIONAL
+        ATTR1           TYPE STRING OPTIONAL
+        ATTR2           TYPE STRING OPTIONAL
+        ATTR3           TYPE STRING OPTIONAL
+        ATTR4           TYPE STRING OPTIONAL
+        !previous       LIKE previous OPTIONAL
+        MAIN_WF_GUID    TYPE rpm_tv_guid OPTIONAL
+        ITEM_GUID       TYPE rpm_tv_guid OPTIONAL
+        DP_GUID         TYPE rpm_tv_guid OPTIONAL
+        BP_GUID         TYPE rpm_tv_guid OPTIONAL
+        SUBRC           TYPE i OPTIONAL
+        USERID          TYPE abp_creation_user OPTIONAL
+        ITEM_EXTID      TYPE /RPM/TV_EXTID OPTIONAL
+        CAUSE           TYPE IF_ABAP_BEHV=>T_FAIL_CAUSE OPTIONAL
+        POSID           TYPE zpos_id OPTIONAL
+        COUNT           TYPE i OPTIONAL
+        SEVERITY        TYPE IF_ABAP_BEHV_MESSAGE=>T_SEVERITY OPTIONAL.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zcl_eppm_messagewrapper IMPLEMENTATION.
+
+  METHOD constructor ##ADT_SUPPRESS_GENERATION.
+    CALL METHOD super->constructor
+      EXPORTING
+        previous = previous.
+
+    MV_ATTR1                 = ATTR1.
+    MV_ATTR2                 = ATTR2.
+    MV_ATTR3                 = ATTR3.
+    MV_ATTR4                 = ATTR4.
+    MV_MAIN_WF_GUID          = MAIN_WF_GUID.
+    MV_ITEM_GUID             = ITEM_GUID.
+    MV_DP_GUID               = DP_GUID.
+    MV_BP_GUID               = BP_GUID.
+    MV_SUBRC                 = SUBRC.
+    MV_USERID                = USERID.
+    MV_ITEM_EXTID            = ITEM_EXTID.
+    MV_CAUSE                 = CAUSE.
+    MV_POSID                 = POSID.
+    MV_COUNT                 = COUNT.
+
+    IF_ABAP_BEHV_MESSAGE~M_SEVERITY = SEVERITY.
+
+    CLEAR me->textid.
+    IF textid IS INITIAL.
+      if_t100_message~t100key = if_t100_message=>default_textid.
+    ELSE.
+      if_t100_message~t100key = textid.
+    ENDIF.
+  ENDMETHOD.
+
+ENDCLASS.
