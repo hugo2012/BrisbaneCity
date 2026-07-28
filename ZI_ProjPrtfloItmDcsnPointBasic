@@ -1,0 +1,39 @@
+@AccessControl.authorizationCheck: #MANDATORY
+@EndUserText.label: 'Project Portfolio Decision Point'
+@Metadata.ignorePropagatedAnnotations: true
+@ObjectModel.usageType:{
+  serviceQuality: #C,
+  sizeCategory: #S,
+  dataClass: #MIXED
+}
+@VDM.viewType: #BASIC
+define view entity ZI_ProjPrtfloItmDcsnPointBasic
+  as select from /rpm/decision as DecisionPoint
+  association [1..1] to cgpl_text as _PPMTextEN on _PPMTextEN.langu = 'E' and $projection.ProjPrtfloItmDcsnPointUUID = _PPMTextEN.guid
+  association [1..1] to I_ProjectPortfolioItemBasic as _PortfolioItem     on $projection.ProjectPortfolioItemUUID = _PortfolioItem.ProjectPortfolioItemUUID
+  association [1..1] to I_ProjectPortfolioLanguage  as _PortfolioLanguage on _PortfolioLanguage.IsDefaultLanguage = 'X'
+
+{
+  key DecisionPoint.guid                                          as ProjPrtfloItmDcsnPointUUID,
+      DecisionPoint.decision_id                                   as ProjPrtfloItemDecisionPoint,
+      _PortfolioItem._Portfolio.ProjectPortfolioMasterLanguage    as ProjectPortfolioMasterLanguage,
+      DecisionPoint.item_guid                                     as ProjectPortfolioItemUUID,
+      cast(DecisionPoint.changed_on as timestamp preserving type) as LastChangeDateTime,
+      DecisionPoint.changed_by                                    as ProjPrtfloItemDcsnPtChangedBy,
+      DecisionPoint.plan_start                                    as ProjPrtfloItmDcsnPtPlndStrtDte,
+      DecisionPoint.plan_finish                                   as PrtfloItmDcsnPtPlndFinishDate,
+      DecisionPoint.actual_start                                  as ProjPrtfloItmDcsnPtActlStrtDte,
+      DecisionPoint.actual_finish                                 as PrtfloItmDcsnPtActlFinishDate,
+      DecisionPoint.status                                        as ProjPrtfloItmDcsnPointStatus,
+      DecisionPoint.active                                        as ProjPrtfloItmDcsnPointIsActive,
+      DecisionPoint.forecast_start                                as PrjPrtfloItmDcsnPtFcstdStrtDte,
+      DecisionPoint.forecast_finish                               as PrtfloItmDcsnPtFcstdFinishDate,
+      DecisionPoint.decision_date                                 as PrtfloItmDcsnPointDecisionDate,
+      DecisionPoint.planned_dec_date                              as ProjPrtfloItmDcsnPtPlndDcsnDte,
+      DecisionPoint.actual_dec_date                               as ProjPrtfloItmDcsnPtActlDcsnDte,
+      _PPMTextEN.text1                                            as ProjPrtfloItmDcsnPtTextEN,
+      _PortfolioLanguage.PrjPortfolioDefaultLanguage,
+      _PortfolioItem.ProjectPortfolioUUID
+}
+where
+  _PortfolioItem.ProjPrtfloItemClassification <> '1' --exclude decision points of Initiatives
