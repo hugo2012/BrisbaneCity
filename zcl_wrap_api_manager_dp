@@ -1,0 +1,25 @@
+CLASS zcl_wrap_api_manager_dp DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES zif_wrap_api_manager_dp .
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zcl_wrap_api_manager_dp IMPLEMENTATION.
+
+  METHOD zif_wrap_api_manager_dp~CREATE_FLP_URL.
+
+    CALL METHOD /ui2/cl_lsapi_manager=>CREATE_FLP_URL( EXPORTING object = object
+                                                                 action = action
+                                                       RECEIVING url = url ).
+
+
+  ENDMETHOD.
+ENDCLASS.
