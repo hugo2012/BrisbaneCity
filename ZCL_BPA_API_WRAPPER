@@ -1,0 +1,179 @@
+class ZCL_BPA_API_WRAPPER definition
+  public
+  final
+  create public .
+
+public section.
+
+      "value(E_DATA) type any
+  class-methods START_PROCESS
+    importing
+      !I_ENVIRONMENT_ID type USRCHAR20 default 'BCC'
+      !I_DEFINITIONID type TEXT100
+      !I_DESTINATION type USRCHAR20 default 'S4TO_BPA'
+      !IT_PROPERTIES type DPR_TT_NAME_VALUE_PAIR_BADI
+    exporting
+      !E_INSTANCE_ID type SYSUUID_C36 .
+  class-methods TRIGGER
+    importing
+      !I_ENVIRONMENT_ID type USRCHAR20 default 'bcc'
+      !I_INSTANCE_ID type SYSUUID_C36
+      !I_TRIGGER_ID type TEXT100
+      !I_DESTINATION type USRCHAR20 default 'S4TO_BPA'
+      !IT_PROPERTIES type DPR_TT_NAME_VALUE_PAIR_BADI .
+protected section.
+
+  class-methods CALL_API
+    importing
+      !I_DESTINATION type USRCHAR20
+      !I_PATH type STRING
+      !I_PAYLOAD type STRING
+    exporting
+      !E_DATA type STRING .
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS ZCL_BPA_API_WRAPPER IMPLEMENTATION.
+
+
+  method CALL_API.
+
+    DATA: lo_http_client TYPE REF TO if_http_client,
+          api_key TYPE string.
+
+    CALL METHOD cl_http_client=>create_by_destination
+      EXPORTING
+        destination              = i_destination
+      IMPORTING
+        client                   = lo_http_client
+      EXCEPTIONS
+        argument_not_found       = 1
+        destination_not_found    = 2
+        destination_no_authority = 3
+        plugin_not_active        = 4
+        internal_error           = 5
+        OTHERS                   = 6.
+
+    lo_http_client->request->set_header_field(
+      name  = '~request_uri'
+      value = i_path
+    ).
+
+    lo_http_client->request->set_method( 'POST' ).
+
+    lo_http_client->request->set_header_field(
+      name  = 'Content-Type'
+      value = 'application/json'
+    ).
+
+    "the API keys are stored in the destination description part 3 (NB client secret still mandatory)
+    SELECT SINGLE rfcdoc3 FROM rfcdoc WHERE rfcdest = @i_destination and rfclang = 'E'
+                    INTO @api_key.
+*    IF I_PATH CS 'bcc'.
+*            api_key = rfc_dest-rfcdoc2.
+*    ELSE.
+*      api_key = rfc_dest-rfcdoc3.
+*    ENDIF.
+
+    lo_http_client->request->set_header_field(
+      name  = 'irpa-api-key'
+      value = api_key
+    ).
+
+    lo_http_client->request->set_cdata( I_PAYLOAD ).
+
+    lo_http_client->send(
+      EXCEPTIONS
+        http_communication_failure = 1
+        http_invalid_state         = 2
+        OTHERS                     = 3
+    ).
+
+    lo_http_client->receive(
+      EXCEPTIONS
+        http_communication_failure = 1
+        http_invalid_state         = 2
+        http_processing_failed     = 3
+        OTHERS                     = 4
+    ).
+
+    CALL METHOD lo_http_client->response->get_status
+      IMPORTING
+        code   = DATA(lv_httpcode)
+        reason = DATA(lv_r).
+
+    E_DATA = lo_http_client->response->get_cdata( ).
+
+    lo_http_client->close( ).
+
+  endmethod.
+
+
+  method START_PROCESS.
+
+    DATA: path TYPE string,
+          json TYPE string.
+
+    path = |/workflow/rest/v1/workflow-instances?environmentId={ I_ENVIRONMENT_ID }|.
+
+    "the btp-sub-account hostname is stored in the SM59 destination description 2
+    SELECT SINGLE rfcdoc2 FROM rfcdoc WHERE rfcdest = @i_destination and rfclang = 'E'
+           INTO @DATA(sa_host).
+
+    "build the context (JSON format)
+    json = '{ "definitionId": "' && sa_host && '.' && I_DEFINITIONID && '", "context":{'.
+    LOOP AT IT_PROPERTIES INTO DATA(prop).
+      json = json && ' "' && prop-name && '":'.
+      IF prop-value+0(1) NE '['.
+        "this property is not an array
+        json = json && ' "' && prop-value && '",'.
+      ELSE.
+         json = json && ' ' && prop-value && ','.
+      ENDIF.
+    ENDLOOP.
+
+    SHIFT json RIGHT DELETING TRAILING ','.     "remove trailing comma
+    json = json && '}}'.
+
+    DATA response_json TYPE string.
+
+    CALL_API( EXPORTING I_DESTINATION = I_DESTINATION
+                        I_PATH        = path
+                        I_PAYLOAD     = json
+              IMPORTING E_DATA        = response_json ).
+
+    E_INSTANCE_ID = substring( val = response_json off = 7 len = 36 ).
+
+  endmethod.
+
+
+  method TRIGGER.
+
+    DATA: path TYPE string,
+          json TYPE string.
+
+    "the btp-sub-account hostname is stored in the SM59 destination description 2
+    SELECT SINGLE rfcdoc2 FROM rfcdoc WHERE rfcdest = @i_destination and rfclang = 'E'
+           INTO @DATA(sa_host).
+
+    path = |/unified/v1/triggers/api/{ sa_host }.{ i_trigger_id }?environmentId={ I_ENVIRONMENT_ID }|.
+
+    "build the context (JSON format)
+    json = '{ "executionId": "' && I_INSTANCE_ID && '", "inputs":{'.
+    LOOP AT IT_PROPERTIES INTO DATA(prop).
+      json = json && ' "' && prop-name && '": "' && prop-value && '",'.
+    ENDLOOP.
+
+    IF sy-subrc = 0.                                "there were parameters
+        SHIFT json RIGHT DELETING TRAILING ','.     "remove trailing comma
+    ENDIF.
+    json = json && '}}'.
+
+    CALL_API( EXPORTING I_DESTINATION = I_DESTINATION
+                        I_PATH        = path
+                        I_PAYLOAD     = json ).
+
+  endmethod.
+ENDCLASS.
