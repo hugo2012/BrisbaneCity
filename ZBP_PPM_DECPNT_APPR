@@ -1,0 +1,1348 @@
+CLASS LHC_ZI_PPM_DECPNT_APPR DEFINITION INHERITING FROM CL_ABAP_BEHAVIOR_HANDLER.
+  PRIVATE SECTION.
+
+    CONSTANTS:  BEGIN OF c_flow_status,
+                     approval_pending   TYPE numc5 VALUE '00000',
+                     pi_status_pending  TYPE numc5 VALUE '00050',
+                     dp_status_pending  TYPE numc5 VALUE '00060',
+                     completed          TYPE numc5 VALUE '00080',
+                     cancelled          TYPE numc5 VALUE '00090',
+                END OF c_flow_status.
+
+    CONSTANTS:  BEGIN OF c_step_status,
+                     decision_pending   TYPE numc5 VALUE '00000',
+                     config_error       TYPE numc5 VALUE '00005',
+                     more_info_req      TYPE numc5 VALUE '00010',
+                     on_hold            TYPE numc5 VALUE '00020',
+                     rejected           TYPE numc5 VALUE '00030',
+                     endorsed           TYPE numc5 VALUE '00060',
+                     approved           TYPE numc5 VALUE '00070',
+                     completed          TYPE numc5 VALUE '00080',
+                     cancelled          TYPE numc5 VALUE '00090',
+                END OF c_step_status.
+
+    CONSTANTS:  BEGIN OF c_dp_status,
+                     in_progress        TYPE char5 VALUE 'ZDP02',
+                     ready_for_decision TYPE char5 VALUE 'ZDP03',
+                     on_hold            TYPE char5 VALUE 'ZDP04',
+                     rejected           TYPE char5 VALUE 'ZDP05',
+                     approved           TYPE char5 VALUE 'ZDP06',
+                END OF c_dp_status.
+
+    CONSTANTS:  BEGIN OF c_pi_status,
+                     approved           TYPE char5 VALUE 'ZPI04',
+                END OF c_pi_status.
+
+    CONSTANTS:  BEGIN OF c_workflow_action,
+                     endorser           TYPE zwrkflow_act VALUE 'PP_ENDORSER',
+                     approver_phase     TYPE zwrkflow_act VALUE 'PP_APPROVER',
+                     approver_invest    TYPE zwrkflow_act VALUE 'INV_APPROVER',
+                     interested         TYPE zwrkflow_act VALUE 'INTEREST_PARTY',
+                     decpnt_manager     TYPE zwrkflow_act VALUE 'INITIATOR',
+                END OF c_workflow_action.
+
+    CONSTANTS:  BEGIN OF c_proj_role,
+                     project_manager    TYPE zprjrole_role VALUE 'PROJ_MGR',
+                     business_support   TYPE zprjrole_role VALUE 'BUS_SUPPORT',
+                END OF c_proj_role.
+
+    CONSTANTS c_dp_prefeasibility TYPE rpm_tv_extid VALUE 'Z_DP_20'.
+
+    CONSTANTS: c_type_position TYPE otype VALUE 'S',
+               c_plan_version_active TYPE plvar VALUE '01'.
+
+
+    METHODS getPortfolioItemURL FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getPortfolioItemURL
+     RESULT portfolio_item_url.
+
+    METHODS getStakeholders FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getStakeholders
+     RESULT all_stakeholders.
+
+    METHODS getHolders FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getHolders
+     RESULT position_holders.
+
+    METHODS getRoleHolders FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getRoleHolders
+     RESULT role_holders.
+
+    METHODS getProjectManagers FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getProjectManagers
+     RESULT managers.
+
+    METHODS getBusinessSupport FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getBusinessSupport
+     RESULT support.
+
+    METHODS getActionParties FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getActionParties
+     RESULT parties.
+
+    METHODS getDPManagers FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getDPManagers
+     RESULT managers.
+
+    METHODS buildNextStep FOR MODIFY IMPORTING keys
+     FOR ACTION zi_ppm_decpnt_appr~buildNextStep
+     RESULT steps_out.
+
+    METHODS getConfigErrorDetails FOR READ IMPORTING keys
+     FOR FUNCTION zi_ppm_decpnt_appr~getConfigErrorDetails
+     RESULT error_details.
+
+    METHODS approvalCompleted FOR MODIFY IMPORTING keys
+     FOR ACTION zi_ppm_decpnt_appr~approvalCompleted.
+
+    METHODS cancelled FOR MODIFY IMPORTING keys
+     FOR ACTION zi_ppm_decpnt_appr~cancelled.
+
+    METHODS setFlowStatus FOR MODIFY IMPORTING keys
+     FOR ACTION zi_ppm_decpnt_appr~setFlowStatus.
+
+    METHODS approve FOR MODIFY IMPORTING keys
+     FOR ACTION Step~approve.
+
+    METHODS endorse FOR MODIFY IMPORTING keys
+     FOR ACTION Step~endorse.
+
+    METHODS reject FOR MODIFY IMPORTING keys
+     FOR ACTION Step~reject.
+
+    METHODS requestMoreInfo FOR MODIFY IMPORTING keys
+     FOR ACTION Step~requestMoreInfo.
+
+    METHODS putOnHold FOR MODIFY IMPORTING keys
+     FOR ACTION Step~putOnHold.
+
+    METHODS record_decision FOR MODIFY IMPORTING keys
+     FOR ACTION Step~record_decision.
+
+    METHODS decPntStatusSet FOR MODIFY IMPORTING keys
+     FOR ACTION ZI_PPM_DECPNT_APPR~decPntStatusSet
+     RESULT valid.
+
+    METHODS itemStatusSet FOR MODIFY IMPORTING keys
+     FOR ACTION ZI_PPM_DECPNT_APPR~itemStatusSet
+     RESULT valid.
+
+    METHODS
+      GET_GLOBAL_AUTHORIZATIONS FOR GLOBAL AUTHORIZATION
+        IMPORTING
+           REQUEST requested_authorizations FOR ZI_PPM_DECPNT_APPR
+        RESULT result.
+
+ENDCLASS.
+
+CLASS LHC_ZI_PPM_DECPNT_APPR IMPLEMENTATION.
+
+  METHOD GET_GLOBAL_AUTHORIZATIONS.
+  ENDMETHOD.
+
+**********************************************************************
+* FLOW
+**********************************************************************
+  METHOD getStakeholders.
+    DATA(fields) = keys[ 1 ].
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+
+    "read the workflow header
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+      ENTITY zi_ppm_decpnt_appr
+      ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+      RESULT DATA(flows).
+
+    IF LINES( flows ) = 1.
+        DATA(flow) = flows[ 1 ].
+
+        "read the PPM item ID
+        SELECT SINGLE ProjectPortfolioItem FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+         WHERE ProjectPortfolioItemUUID = @flow-ItemGuID
+         INTO @DATA(item_id).
+
+        IF sy-subrc = 0.
+            "populate a range of the workflow actions relevant for the stakeholders email
+            DATA: r_actions TYPE RANGE OF zwrkflow_act,
+                  lsr_action LIKE LINE OF r_actions.
+
+            lsr_action-sign = 'I'.
+            lsr_action-option = 'EQ'.
+
+            lsr_action-low = c_workflow_action-endorser.
+            APPEND lsr_action to r_actions.
+
+            lsr_action-low = c_workflow_action-approver_phase.
+            APPEND lsr_action to r_actions.
+
+            lsr_action-low = c_workflow_action-approver_invest.
+            APPEND lsr_action to r_actions.
+
+            lsr_action-low = c_workflow_action-interested.
+            APPEND lsr_action to r_actions.
+
+            DATA: positions TYPE STANDARD TABLE OF ZA_PPM_DECPNT_POSITION,
+                  stakeholder LIKE LINE OF all_stakeholders.
+
+            "read the relevant stakeholders for this portfolio item
+            SELECT FROM zeppm_proj_roles
+                   FIELDS position_id
+                   WHERE ppm_item = @item_id AND
+                         workflow_action IN @r_actions AND
+                         position_id IS NOT INITIAL
+                   INTO TABLE @positions.
+
+            SORT positions BY PositionID.
+            DELETE ADJACENT DUPLICATES FROM positions COMPARING PositionID.
+
+            "get the holders of these positions and append to the output table
+            stakeholder-WfinstMain = fields-WfinstMain.
+            LOOP AT positions INTO DATA(position).
+                READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                    ENTITY zi_ppm_decpnt_appr
+                    EXECUTE getHolders
+                    FROM VALUE #( ( %param = VALUE #( PositionID = position-PositionID ) ) )
+                    RESULT DATA(holders)
+                    REPORTED reported.
+                IF reported-zi_ppm_decpnt_appr IS INITIAL.
+                    LOOP AT holders INTO DATA(holder_in).
+                      IF holder_in-%param-Email IS NOT INITIAL.
+                          stakeholder-%param-Email  = holder_in-%param-Email.
+                          stakeholder-%param-UserID = holder_in-%param-UserID.
+                          APPEND stakeholder TO all_stakeholders.
+                      ENDIF.
+                    ENDLOOP.
+                ELSE.
+                    APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+                    EXIT.
+                ENDIF.
+            ENDLOOP.
+
+            SORT all_stakeholders BY %param-Email.
+            DELETE ADJACENT DUPLICATES FROM all_stakeholders COMPARING %param-Email.
+        ELSE.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_PORTFOLIO_ITEM_READ
+                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                        ITEM_GUID = flow-ItemGuID
+                                        SUBRC     = sy-subrc ).
+        ENDIF.
+    ELSE.
+        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_MAIN_WF_READ
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    MAIN_WF_GUID = fields-WfinstMain ).
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD getProjectManagers.
+    DATA(fields) = keys[ 1 ].
+
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+        ENTITY zi_ppm_decpnt_appr
+        EXECUTE getRoleHolders
+        FROM VALUE #(   ( WfinstMain = fields-WfinstMain
+                          %param = VALUE #( RoleID = c_proj_role-project_manager ) ) )
+        RESULT DATA(holders)
+        FAILED failed
+        REPORTED reported.
+
+        MOVE-CORRESPONDING holders TO managers.
+  ENDMETHOD.
+
+  METHOD getBusinessSupport.
+    DATA(fields) = keys[ 1 ].
+
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+        ENTITY zi_ppm_decpnt_appr
+        EXECUTE getRoleHolders
+        FROM VALUE #( ( WfinstMain = fields-WfinstMain
+                        %param = VALUE #( RoleID = c_proj_role-business_support ) ) )
+        RESULT DATA(holders)
+        FAILED failed
+        REPORTED reported.
+
+        MOVE-CORRESPONDING holders TO support.
+  ENDMETHOD.
+
+  METHOD getRoleHolders.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+
+    "read the workflow header
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+      ENTITY zi_ppm_decpnt_appr
+      ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+      RESULT DATA(flows).
+
+    IF LINES( flows ) = 1.
+        DATA(flow) = flows[ 1 ].
+
+        "read the PPM item ID
+        SELECT SINGLE ProjectPortfolioItem FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+         WHERE ProjectPortfolioItemUUID = @flow-ItemGuID
+         INTO @DATA(item_id).
+
+        IF sy-subrc = 0.
+            DATA: positions TYPE STANDARD TABLE OF ZA_PPM_DECPNT_POSITION,
+                  role_holder LIKE LINE OF role_holders.
+
+            "read the relevant role holders for this portfolio item
+            SELECT FROM zeppm_proj_roles
+                   FIELDS position_id
+                   WHERE ppm_item = @item_id AND
+                         prjrole_role = @fields-%param-RoleID AND
+                         position_id IS NOT INITIAL
+                   INTO TABLE @positions.
+
+            SORT positions BY PositionID.
+            DELETE ADJACENT DUPLICATES FROM positions COMPARING PositionID.
+
+            "get the holders of these positions and append to the output table
+            role_holder-WfinstMain = fields-WfinstMain.
+            LOOP AT positions INTO DATA(position).
+                READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                    ENTITY zi_ppm_decpnt_appr
+                    EXECUTE getHolders
+                    FROM VALUE #( ( %param = VALUE #( PositionID = position-PositionID ) ) )
+                    RESULT DATA(holders)
+                    REPORTED reported.
+                IF reported-zi_ppm_decpnt_appr IS INITIAL.
+                    LOOP AT holders INTO DATA(holder_in).
+                      IF holder_in-%param-Email IS NOT INITIAL.
+                          role_holder-%param-Email  = holder_in-%param-Email.
+                          role_holder-%param-UserID = holder_in-%param-UserID.
+                          APPEND role_holder TO role_holders.
+                      ENDIF.
+                    ENDLOOP.
+                ELSE.
+                    APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+                    EXIT.
+                ENDIF.
+            ENDLOOP.
+
+            SORT role_holders BY %param-Email.
+            DELETE ADJACENT DUPLICATES FROM role_holders COMPARING %param-Email.
+        ELSE.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_PORTFOLIO_ITEM_READ
+                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                        ITEM_GUID = flow-ItemGuID
+                                        SUBRC     = sy-subrc ).
+        ENDIF.
+    ELSE.
+        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_MAIN_WF_READ
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    MAIN_WF_GUID = fields-WfinstMain ).
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD getActionParties.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+
+    "read the workflow header
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+      ENTITY zi_ppm_decpnt_appr
+      ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+      RESULT DATA(flows).
+    IF LINES( flows ) = 1.
+        DATA(flow) = flows[ 1 ].
+
+        "read the PPM item ID
+        SELECT SINGLE ProjectPortfolioItem FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+         WHERE ProjectPortfolioItemUUID = @flow-ItemGuID
+         INTO @DATA(item_id).
+
+        IF sy-subrc = 0.
+            DATA: positions TYPE STANDARD TABLE OF ZA_PPM_DECPNT_POSITION,
+                  party LIKE LINE OF parties.
+
+            "read the relevant action parties for this portfolio item
+            SELECT FROM zeppm_proj_roles
+                   FIELDS position_id
+                   WHERE ppm_item = @item_id AND
+                         workflow_action = @fields-%param-ActionID AND
+                         position_id IS NOT INITIAL
+                   INTO TABLE @positions.
+
+            SORT positions BY PositionID.
+            DELETE ADJACENT DUPLICATES FROM positions COMPARING PositionID.
+
+            "get the holders of these positions and append to the output table
+            party-WfinstMain = fields-WfinstMain.
+            LOOP AT positions INTO DATA(position).
+                READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                    ENTITY zi_ppm_decpnt_appr
+                    EXECUTE getHolders
+                    FROM VALUE #( ( %param = VALUE #( PositionID = position-PositionID ) ) )
+                    RESULT DATA(holders)
+                    REPORTED reported.
+                IF reported-zi_ppm_decpnt_appr IS INITIAL.
+                    LOOP AT holders INTO DATA(holder_in).
+                      IF holder_in-%param-Email IS NOT INITIAL.
+                          party-%param-Email  = holder_in-%param-Email.
+                          party-%param-UserID = holder_in-%param-UserID.
+                          APPEND party TO parties.
+                      ENDIF.
+                    ENDLOOP.
+                ELSE.
+                    APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+                    EXIT.
+                ENDIF.
+            ENDLOOP.
+
+            SORT parties BY %param-Email.
+            DELETE ADJACENT DUPLICATES FROM parties COMPARING %param-Email.
+        ELSE.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_PORTFOLIO_ITEM_READ
+                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                        ITEM_GUID = flow-ItemGuID
+                                        SUBRC     = sy-subrc ).
+        ENDIF.
+    ELSE.
+        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_MAIN_WF_READ
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    MAIN_WF_GUID = fields-WfinstMain ).
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD getDPManagers.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+        ENTITY zi_ppm_decpnt_appr
+        EXECUTE getActionParties
+        FROM VALUE #( ( WfinstMain = fields-WfinstMain
+                        %param = VALUE #( ActionID = c_workflow_action-decpnt_manager ) ) )
+        RESULT DATA(parties).
+
+        MOVE-CORRESPONDING parties TO managers.
+
+    IF LINES( managers ) = 0.
+        "the project roles table doesn't have any valid DP manager, so read the workflow header to get the actual initiator
+        READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+          ENTITY zi_ppm_decpnt_appr
+          FIELDS ( LocalCreatedBy )
+          WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+          RESULT DATA(user_ids).
+
+        IF sy-subrc = 0.
+            IF LINES( user_ids ) > 0.
+                DATA(user_id) = user_ids[ 1 ]-LocalCreatedBy.
+                "read the default email address of this user
+                SELECT SINGLE DefaultEmailAddress FROM ZI_BusinessUserDetails WITH PRIVILEGED ACCESS
+                WHERE UserID = @user_id
+                INTO @DATA(user).
+                IF sy-subrc = 0.
+                    IF user IS NOT INITIAL.
+                        DATA manager LIKE LINE OF managers.
+                        manager-%param-Email  = user.
+                        manager-%param-UserID = user_id.
+                        APPEND manager TO managers.
+                    ELSE.
+                        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_USER_EMAIL_BLANK
+                                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                                    USERID   = user_id ).
+                    ENDIF.
+                ELSE.
+                    transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                                TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_USER_EMAIL
+                                                SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                                USERID   = user_id
+                                                SUBRC    = sy-subrc ).
+                ENDIF.
+            ENDIF.
+        ELSE.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_MAIN_WF_READ_CREATED_BY
+                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                        MAIN_WF_GUID = fields-WfinstMain
+                                        SUBRC     = sy-subrc ).
+        ENDIF.
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD getHolders.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+    DATA(position_id) = fields-%param-PositionID.
+    DATA count TYPE i.
+
+    SELECT FROM ZI_PositionHolder_DP WITH PRIVILEGED ACCESS
+                FIELDS UserID, EmailAddress
+                WHERE PositionID = @position_id
+                INTO TABLE @DATA(holders).
+
+    IF sy-subrc = 0.
+        DATA holder_out LIKE LINE OF position_holders.
+
+        LOOP AT holders INTO DATA(holder).
+            CLEAR holder_out.
+            IF holder-EmailAddress IS NOT INITIAL.
+                holder_out-%param-Email  = holder-EmailAddress.
+                holder_out-%param-UserID = holder-UserID.
+                APPEND holder_out TO position_holders.
+            ELSE.
+                transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                TEXTID     = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_USER_EMAIL_BLANK
+                                SEVERITY   = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                USERID     = holder-UserID ).
+                EXIT.
+            ENDIF.
+        ENDLOOP.
+    ELSE.
+        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_EMPTY_POS
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    POSID    = position_id ).
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+*  METHOD getHolders.
+*    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+*    DATA(fields) = keys[ 1 ].
+*    DATA(position_id) = fields-%param-PositionID.
+*    DATA count TYPE i.
+*
+*    "read the holders of this position
+*    SELECT EmploymentInternalID FROM ZI_EmployeePositionOP WITH PRIVILEGED ACCESS
+*                           WHERE Appointment = @position_id
+*                           INTO TABLE @DATA(personnel_numbers).
+*
+*    IF sy-subrc = 0.
+*        "build a range of the personnel numbers of the holders
+*        DATA: r_pernr TYPE RANGE OF cr_objid,
+*              lsr_pernr LIKE LINE OF r_pernr.
+*        lsr_pernr-sign = 'I'.
+*        lsr_pernr-option = 'EQ'.
+*
+*        LOOP AT personnel_numbers INTO DATA(personnel_number).
+*          lsr_pernr-low = personnel_number-EmploymentInternalID.
+*          APPEND lsr_pernr TO r_pernr.
+*        ENDLOOP.
+*
+*        "get details of these people
+*        SELECT FROM I_WorkforcePerson WITH PRIVILEGED ACCESS
+*               FIELDS   Person,
+*                        PersonExternalID,
+*                        PersonFullName,
+*                        BusinessPartnerUUID
+*               WHERE PersonExternalID IN @r_pernr
+*               INTO TABLE @DATA(people).
+*        IF sy-subrc = 0 AND LINES( people ) > 0.
+*            "read the address data including email address
+*            DATA: r_bp_uuid TYPE RANGE OF rpm_tv_guid,
+*                  lsr_bp_uuid LIKE LINE OF r_bp_uuid.
+*            lsr_bp_uuid-sign = 'I'.
+*            lsr_bp_uuid-option = 'EQ'.
+*
+*            LOOP AT people INTO DATA(person).
+*              lsr_bp_uuid-low = person-BusinessPartnerUUID.
+*              APPEND lsr_bp_uuid TO r_bp_uuid.
+*            ENDLOOP.
+*
+*            SELECT FROM I_WorkplaceAddress WITH PRIVILEGED ACCESS
+*                   FIELDS BusinessPartnerUUID, DefaultEmailAddress AS EmailAddress
+*                   WHERE BusinessPartnerUUID IN @r_bp_uuid
+*                   INTO TABLE @DATA(addresses).
+*
+*            IF sy-subrc = 0.
+*                DATA holder_out LIKE LINE OF position_holders.
+*
+*                LOOP AT addresses INTO DATA(address).
+*                    CLEAR holder_out.
+*                    IF address-EmailAddress IS NOT INITIAL.
+*                        holder_out-%param-Email = address-EmailAddress.
+*                        APPEND holder_out TO position_holders.
+*                    ELSE.
+*                        count = LINES( r_bp_uuid ).
+*                        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+*                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_EMAIL_BP
+*                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+*                                        BP_GUID  = address-BusinessPartnerUUID ).
+*                        EXIT.
+*                    ENDIF.
+*                ENDLOOP.
+*            ELSE.
+*                count = LINES( r_bp_uuid ).
+*                transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+*                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_EMAIL
+*                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+*                                        SUBRC    = sy-subrc
+*                                        COUNT    = count ).
+*            ENDIF.
+*         ELSE.
+*            count = LINES( r_pernr ).
+*            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+*                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_WORKFORCE
+*                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+*                                    SUBRC    = sy-subrc
+*                                    COUNT    = count ).
+*         ENDIF.
+*    ELSE.
+*        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+*                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_EMPTY_POS
+*                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+*                                    POSID    = position_id ).
+*    ENDIF.
+*
+*    IF transition_err_msg IS NOT INITIAL.
+*        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+*    ENDIF.
+*  ENDMETHOD.
+
+  METHOD buildNextStep.
+    DATA error_msg TYPE bapi_msg.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA next_counter TYPE crmt_item_no.
+    DATA(fields) = keys[ 1 ].
+    DATA approval_complete TYPE abap_bool.
+
+    "What should the new counter be? How many steps do we have already?
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+      ENTITY zi_ppm_decpnt_appr
+      ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+      RESULT DATA(flows)
+      ENTITY zi_ppm_decpnt_appr
+      BY \_Steps
+      ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+      RESULT DATA(existing_steps)
+      FAILED failed
+      REPORTED reported.
+
+    IF failed-zi_ppm_decpnt_appr IS INITIAL AND failed-step IS INITIAL.
+*    IF LINES( flows ) = 0.
+*        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+*                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_MAIN_WF_READ
+*                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+*                                    MAIN_WF_GUID = fields-WfinstMain ).
+*    ELSE.
+        DATA(flow) = flows[ 1 ].
+        DATA(count) = LINES( existing_steps ).
+        DATA(new_count) = count + 1.
+        WRITE new_count to next_counter.
+
+        "read the sequence and position of the last step that was added
+        "NB the *sequence* comes from the stakeholders table and is maintained by the users
+        "whereas the *counter* is a strict index of the steps created for this approval run
+
+        "NB no top/limit feature in EML, so we must find the latest entry
+        SORT existing_steps BY Counter DESCENDING.
+        DATA prev_step LIKE LINE OF existing_steps.
+        IF LINES( existing_steps ) > 0.
+            prev_step = existing_steps[ 1 ].
+        ENDIF.
+
+        "read the PPM item ID
+        SELECT SINGLE ProjectPortfolioItem FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+         WHERE ProjectPortfolioItemUUID = @flow-ItemGuID
+         INTO @DATA(item_id).
+
+        IF sy-subrc <> 0.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_PORTFOLIO_ITEM_READ
+                                SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                ITEM_GUID = flow-ItemGuID
+                                SUBRC     = sy-subrc ).
+        ELSE.
+            "populate a range of the workflow actions relevant for approvals
+            DATA: r_approval_actions TYPE RANGE OF zwrkflow_act,
+                  lsr_approval_action LIKE LINE OF r_approval_actions.
+
+            lsr_approval_action-sign = 'I'.
+            lsr_approval_action-option = 'EQ'.
+
+            lsr_approval_action-low = c_workflow_action-endorser.
+            APPEND lsr_approval_action to r_approval_actions.
+
+            lsr_approval_action-low = c_workflow_action-approver_phase.
+            APPEND lsr_approval_action to r_approval_actions.
+
+            IF flow-InvestmentApprovalRequired = 'X'.
+                lsr_approval_action-low = c_workflow_action-approver_invest.
+                APPEND lsr_approval_action to r_approval_actions.
+            ENDIF.
+
+            "read the next stakeholder from the stakeholders table
+            "NB we tolerate duplicates with the same workflow sequence but different position IDs, to be
+            "processed in an arbitrary order
+            SELECT FROM zeppm_proj_roles
+                   FIELDS position_id,
+                          des_point_govrole,
+                          workflow_action,
+                          workflow_seq
+                   WHERE ppm_item = @item_id AND
+                         workflow_seq GE @prev_step-WorkflowSequence AND
+                         workflow_action IN @r_approval_actions
+                   ORDER BY workflow_seq ASCENDING
+                   INTO TABLE @DATA(stakeholders).
+
+            IF prev_step-PositionID IS NOT INITIAL.
+                "exclude the row that we did last time (NB we are tolerating duplication of workflow sequence)
+                DELETE stakeholders WHERE position_id = prev_step-PositionID AND
+                                          workflow_seq = prev_step-WorkflowSequence.
+            ENDIF.
+
+            DATA: new_step_uuid TYPE rpm_tv_guid,
+                  approval_mode TYPE abap_boolean VALUE IS INITIAL,
+                  next_sequence TYPE zwrkflow_seq1,
+                  new_steps TYPE TABLE FOR CREATE zi_ppm_decpnt_appr\_Steps,
+                  agents TYPE STANDARD TABLE OF ZA_PPM_DEC_PNT_STAKEHOLDER,
+                  agent LIKE LINE OF agents,
+                  holder_summary TYPE fincs_long_text_250.
+
+            IF LINES( stakeholders ) > 0.
+                "approval is not yet complete, add the next decision entry
+                DATA(next_stakeholder) = stakeholders[ 1 ].
+                next_sequence = next_stakeholder-workflow_seq.
+                IF next_stakeholder-workflow_action NE c_workflow_action-endorser.
+                    approval_mode = 'X'.
+                ENDIF.
+
+                IF next_stakeholder-position_id IS NOT INITIAL.
+                    "is the position ID valid?
+                    SELECT COUNT( * )
+                        FROM I_HCMObject
+                        INTO @DATA(pos_match_count)
+                        WHERE HCMPlanVersion = @c_plan_version_active AND
+                              HCMObjectType = @c_type_position AND
+                              HCMObjectID = @next_stakeholder-position_id AND
+                              StartDate <= @sy-datum AND
+                              EndDate >= @sy-datum.
+                    IF pos_match_count > 0.
+                        "get the holders of this position
+                        READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                            ENTITY zi_ppm_decpnt_appr
+                            EXECUTE getHolders
+                            FROM VALUE #( ( %param = VALUE #( PositionID = next_stakeholder-position_id ) ) )
+                            RESULT DATA(holders)
+                            REPORTED reported.
+                        IF reported-zi_ppm_decpnt_appr IS INITIAL.
+                            IF LINES( holders ) > 0.
+                                agents = VALUE #( ( ) ( ) ( ) ).       "ensure that there are at least 3 rows, for up to 3 agents
+                                LOOP AT holders INTO DATA(holder).
+                                    IF sy-tabix > 3.
+                                        EXIT.
+                                    ENDIF.
+                                    agents[ sy-tabix ]-Email  = holder-%param-Email.
+                                    agents[ sy-tabix ]-UserID = holder-%param-UserID.
+
+                                    IF sy-tabix = 1.
+                                        holder_summary = holder-%param-Email.
+                                    ELSE.
+                                        holder_summary = holder_summary && |, | && holder-%param-Email.
+                                    ENDIF.
+                                ENDLOOP.
+                            ELSE.
+                                MESSAGE E003(ZEPPM) WITH next_stakeholder-position_id
+                                                         next_stakeholder-workflow_seq INTO error_msg.      "Position &1 (sequence &2) is empty
+                            ENDIF.
+                        ELSE.
+                            APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+                            EXIT.
+                        ENDIF.
+                   ELSE.
+                    MESSAGE E001(ZEPPM) WITH next_stakeholder-position_id
+                                             next_stakeholder-workflow_seq INTO error_msg.              "Position &1 is invalid (sequence &2)
+                   ENDIF.
+                ELSE.
+                  MESSAGE E000(ZEPPM) WITH next_stakeholder-workflow_seq INTO error_msg.                "Choose a position for sequence &1
+                ENDIF.
+            ELSEIF LINES( existing_steps ) = 0.
+                "this is the first step but there aren't any stakeholders
+                MESSAGE E002(ZEPPM) INTO error_msg.                 "Please maintain at least 1 endorser or approver (Maintain Project Roles)
+            ELSE.
+              approval_complete = 'X'.
+            ENDIF.
+
+            IF error_msg IS NOT INITIAL.
+                "invalid project roles config
+                steps_out = VALUE #( ( WfinstMain = fields-WfinstMain
+                                       %param = VALUE #(  MessageText = error_msg ) ) ).
+                "save the step with the message
+                new_steps = VALUE #(
+                        ( WfinstMain = fields-WfinstMain
+                          %target = VALUE #( ( %cid = 'cid1'
+                                               wfinstmain = fields-WfinstMain
+                                               counter = next_counter
+                                               Status = c_step_status-config_error
+                                               MessageText = error_msg
+                                               WorkflowSequence = next_sequence
+                                               WorkflowAction = next_stakeholder-workflow_action
+                                               PositionID = next_stakeholder-position_id ) ) )
+                        ).
+                MODIFY ENTITY IN LOCAL MODE zi_ppm_decpnt_appr
+                        CREATE BY \_Steps
+                        FIELDS ( WfinstMain Counter Status WorkflowSequence WorkflowAction PositionID MessageText ) WITH new_steps.
+            ELSEIF approval_complete = 'X'.
+                "workflow interprets initial value as the end of approval
+                steps_out = VALUE #( ( WfinstMain = fields-WfinstMain ) ).
+            ELSE.
+               new_steps = VALUE #(
+                        ( WfinstMain = fields-WfinstMain
+                          %target = VALUE #( ( %cid = 'cid1'
+                                               wfinstmain = fields-WfinstMain
+                                               counter = next_counter
+                                               WorkflowSequence = next_sequence
+                                               WorkflowAction = next_stakeholder-workflow_action
+                                               GovernanceRole = next_stakeholder-des_point_govrole
+                                               HolderSummary = holder_summary
+                                               PositionID = next_stakeholder-position_id )
+                                            ) )
+                        ).
+
+                MODIFY ENTITY IN LOCAL MODE zi_ppm_decpnt_appr
+                        CREATE BY \_Steps
+                        FIELDS ( WfinstMain Counter WorkflowSequence WorkflowAction
+                                 GovernanceRole PositionID HolderSummary MessageText ) WITH new_steps
+                        FAILED DATA(failed_msg)
+                        REPORTED DATA(rep_msg).
+
+                "read new record
+                READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                        ENTITY zi_ppm_decpnt_appr
+                        BY \_Steps
+                        ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+                        RESULT DATA(steps_added).
+
+                        "NB no top/limit feature in EML, so we must find the latest entry
+                        SORT steps_added BY Counter DESCENDING.
+                        DATA(step_added) = steps_added[ 1 ].
+                        new_step_uuid = step_added-StepUUID.
+
+
+                "store the current step UUID on the header
+                MODIFY ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                   ENTITY zi_ppm_decpnt_appr
+                    UPDATE FIELDS ( CurrentStepUUID )
+                    WITH VALUE #(
+                        ( WfinstMain = fields-WfinstMain
+                          CurrentStepUUID = new_step_uuid )
+                    )
+                    FAILED DATA(failed_currstep)
+                    REPORTED DATA(rep_currstep).
+
+                    steps_out = VALUE #(
+                                ( WfinstMain = fields-WfinstMain
+                                  %param = VALUE #( Counter      = next_counter
+                                                    StepUUID     = new_step_uuid
+                                                    Agent1Email  = agents[ 1 ]-Email
+                                                    Agent2Email  = agents[ 2 ]-Email
+                                                    Agent3Email  = agents[ 3 ]-Email
+                                                    Agent1UserID = agents[ 1 ]-UserID
+                                                    Agent2UserID = agents[ 2 ]-UserID
+                                                    Agent3UserID = agents[ 3 ]-UserID
+                                                    ApprovalMode = approval_mode )
+                                )
+                            ).
+              ENDIF.
+          ENDIF.
+      ENDIF.
+
+      IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+      ENDIF.
+  ENDMETHOD.
+
+  METHOD getconfigerrordetails.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+
+    "the error message will have been saved against the latest step
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+      ENTITY zi_ppm_decpnt_appr
+      BY \_Steps
+      ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+      RESULT DATA(existing_steps)
+      FAILED failed
+      REPORTED reported.
+
+    IF  failed-zi_ppm_decpnt_appr IS INITIAL AND
+        failed-step IS INITIAL.
+        "NB no top/limit feature in EML, so we must find the latest entry
+        SORT existing_steps BY Counter DESCENDING.
+        DATA prev_step LIKE LINE OF existing_steps.
+        IF LINES( existing_steps ) > 0.
+            prev_step = existing_steps[ 1 ].
+        ENDIF.
+
+        "read the sys admin from the project roles table
+        DATA agents TYPE STANDARD TABLE OF ZA_PPM_DEC_PNT_STAKEHOLDER.
+        agents = VALUE #( ( ) ( ) ( ) ).
+
+        READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+            ENTITY zi_ppm_decpnt_appr
+            EXECUTE getBusinessSupport
+            FROM VALUE #(   ( WfinstMain = fields-WfinstMain ) )
+            RESULT DATA(support)
+            FAILED failed
+            REPORTED reported.
+
+        IF failed-zi_ppm_decpnt_appr IS INITIAL.
+            LOOP AT support INTO DATA(support_in).
+                IF sy-tabix > 3.
+                    EXIT.
+                ENDIF.
+                agents[ sy-tabix ]-Email  = support_in-%param-Email.
+                agents[ sy-tabix ]-UserID = support_in-%param-UserID.
+            ENDLOOP.
+
+            IF sy-subrc = 0.
+                error_details = VALUE #(
+                                    ( WfinstMain = fields-WfinstMain
+                                      %param = VALUE #( MessageText  = prev_step-MessageText
+                                                        Agent1Email  = agents[ 1 ]-Email
+                                                        Agent2Email  = agents[ 2 ]-Email
+                                                        Agent3Email  = agents[ 3 ]-Email
+                                                        Agent1UserID = agents[ 1 ]-UserID
+                                                        Agent2UserID = agents[ 2 ]-UserID
+                                                        Agent3UserID = agents[ 3 ]-UserID )
+                                    )
+                                ).
+            ELSE.
+                transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                            TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_NO_BUS_SUPPORT
+                                            SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                            MAIN_WF_GUID = fields-WfinstMain ).
+            ENDIF.
+         ENDIF.
+      ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD APPROVALCOMPLETED.
+     DATA:  keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_appr~setFlowStatus.
+     keys_out = CORRESPONDING #( keys ).
+
+     "read the flow header to get the decision point GUID and read all the steps to get the latest action e.g. approve or reject
+     DATA(fields) = keys[ 1 ].
+     READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+       ENTITY zi_ppm_decpnt_appr
+        FIELDS ( DecisionGuID ) WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+        RESULT DATA(flows)
+       ENTITY zi_ppm_decpnt_appr
+        BY \_Steps
+        ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+        RESULT DATA(all_steps)
+        FAILED failed
+        REPORTED reported.
+
+     IF failed-zi_ppm_decpnt_appr IS INITIAL AND
+        failed-step IS INITIAL.
+         DATA(flow) = flows[ 1 ].
+
+         "NB no top/limit feature in EML, so we must find the latest entry
+         SORT all_steps BY Counter DESCENDING.
+         DATA(final_step) = all_steps[ 1 ].
+
+         "get the decision point ID to see if pre-feasibility (and was approved)
+         SELECT SINGLE ProjPrtfloItemDecisionPoint FROM ZI_ProjPrtfloItmDcsnPointBasic WITH PRIVILEGED ACCESS
+         WHERE ProjPrtfloItmDcsnPointUUID = @flow-DecisionGuID
+         INTO @DATA(dp_id).
+
+         IF sy-subrc = 0.
+             IF final_step-Status = c_step_status-approved and dp_id = c_dp_prefeasibility.
+                "change of portfolio item status is required for approved pre-feasibility gate
+                keys_out[ 1 ]-%param-NewStatus = c_flow_status-pi_status_pending.
+             ELSE.
+                "only status change required is for decision point
+                keys_out[ 1 ]-%param-NewStatus = c_flow_status-dp_status_pending.
+             ENDIF.
+
+             setflowstatus( EXPORTING keys = keys_out
+                            CHANGING  reported = reported
+                                      failed = failed ).
+         ELSE.
+             APPEND VALUE #( %MSG = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_DP_HDR
+                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                        DP_GUID  = flow-DecisionGuID
+                                        SUBRC    = sy-subrc ) ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+            APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+         ENDIF.
+     ENDIF.
+  ENDMETHOD.
+
+  METHOD CANCELLED.
+     DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+     DATA(fields) = keys[ 1 ].
+     DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_appr~setFlowStatus.
+     keys_out = CORRESPONDING #( keys ).
+     keys_out[ 1 ]-%param-NewStatus = c_flow_status-cancelled.
+     setflowstatus( EXPORTING keys = keys_out
+                    CHANGING  reported = reported
+                              failed = failed ).
+
+     IF LINES( failed-zi_ppm_decpnt_appr ) = 0.
+         "read the flow to get the final step UUID
+         READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+           ENTITY zi_ppm_decpnt_appr
+            FIELDS ( FinalStepUUID ) WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+            RESULT DATA(flows)
+            FAILED DATA(failed_read).
+         DATA(flow) = flows[ 1 ].
+
+         IF failed_read-zi_ppm_decpnt_appr IS INITIAL.
+             "set the status of that step to cancelled
+             DATA keys_out_step TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_step~record_decision.
+             keys_out_step = CORRESPONDING #( keys ).
+             keys_out_step[ 1 ]-%param-NewStatus = c_step_status-cancelled.
+             keys_out_step[ 1 ]-StepUUID = flow-FinalStepUUID.
+
+             "read the email address (used for consistency) of the user who triggered the cancellation
+             SELECT SINGLE \_AddrCurDefaultEmailAddress-EmailAddress
+                           FROM I_USER
+                           WHERE USERID = @fields-%param-UserID
+                           INTO @DATA(email) PRIVILEGED ACCESS.
+
+             keys_out_step[ 1 ]-%param-ProcessorEmail = email.
+
+             record_decision( EXPORTING keys = keys_out_step ).
+         ELSE.
+             APPEND VALUE #( %MSG = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                        TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_LATEST_STEP
+                                        SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                        MAIN_WF_GUID = fields-WfinstMain
+                                        CAUSE        = failed_read-zi_ppm_decpnt_appr[ 1 ]-%fail-cause )
+                           ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+             APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+         ENDIF.
+     ENDIF.
+  ENDMETHOD.
+
+  METHOD SETFLOWSTATUS.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+
+    "read the last step
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+        ENTITY zi_ppm_decpnt_appr
+        BY \_Steps
+        ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+        RESULT DATA(all_steps)
+        FAILED DATA(failed_read).
+
+    IF failed_read-zi_ppm_decpnt_appr IS INITIAL.
+        "NB no top/limit feature in EML, so we must find the latest entry
+        SORT all_steps BY Counter DESCENDING.
+        DATA(final_step) = all_steps[ 1 ].
+
+
+        "set the status and save the final step uuid
+        MODIFY ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+           ENTITY zi_ppm_decpnt_appr
+            UPDATE FIELDS ( FinalStepUUID Status )
+            WITH VALUE #(
+                ( WfinstMain = fields-WfinstMain
+                  FinalStepUUID = final_step-StepUUID
+                  Status = fields-%param-NewStatus )
+            )
+            FAILED DATA(failed_upd)
+            REPORTED DATA(rep_msg).
+
+        IF failed_upd-zi_ppm_decpnt_appr IS NOT INITIAL.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_UPD_FLOW_HDR
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    MAIN_WF_GUID = fields-WfinstMain
+                                    CAUSE        = failed_upd-zi_ppm_decpnt_appr[ 1 ]-%fail-cause ).
+        ENDIF.
+    ELSE.
+        transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_LATEST_STEP
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    MAIN_WF_GUID = fields-WfinstMain
+                                    CAUSE        = failed_read-zi_ppm_decpnt_appr[ 1 ]-%fail-cause ).
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+* check if the decision point status has been set correctly
+  METHOD decPntStatusSet.
+    DATA transition_err_msg TYPE REF TO zcl_eppm_messagewrapper.
+    DATA(fields) = keys[ 1 ].
+
+    "read the actual status of the decision point
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+       ENTITY zi_ppm_decpnt_appr
+        FIELDS ( DecisionGuID ) WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+        RESULT DATA(flows)
+        FAILED failed
+        REPORTED reported.
+
+    IF failed-zi_ppm_decpnt_appr IS INITIAL.
+        DATA(flow) = flows[ 1 ].
+
+        SELECT SINGLE ProjPrtfloItmDcsnPointStatus FROM ZI_ProjPrtfloItmDcsnPointBasic WITH PRIVILEGED ACCESS
+            WHERE ProjPrtfloItmDcsnPointUUID = @flow-DecisionGuID
+            INTO @DATA(dp_status).
+
+        IF sy-subrc = 0.
+            "target status depends on the decision taken on the last approval step
+            READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+                ENTITY zi_ppm_decpnt_appr
+                BY \_Steps
+                ALL FIELDS WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+                RESULT DATA(all_steps)
+                FAILED failed
+                REPORTED reported.
+
+            IF failed-step IS INITIAL.
+                "NB no top/limit feature in EML, so we must find the latest entry
+                SORT all_steps BY Counter DESCENDING.
+                DATA(final_step) = all_steps[ 1 ].
+
+                DATA: target_status TYPE /rpm/tv_status_common,
+                      status_ok TYPE abap_boolean VALUE IS INITIAL.
+
+                CASE final_step-Status.
+                  WHEN c_step_status-more_info_req.
+                    target_status = c_dp_status-in_progress.
+
+                  WHEN c_step_status-on_hold.
+                    target_status = c_dp_status-on_hold.
+
+                  WHEN c_step_status-rejected.
+                    target_status = c_dp_status-rejected.
+
+                  WHEN OTHERS.
+                    target_status = c_dp_status-approved.
+
+                ENDCASE.
+
+                IF target_status = dp_status.
+                    "the status has been updated as we expected
+                    status_ok = 'X'.
+
+                    "update the workflow header status
+                    DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_appr~setFlowStatus.
+                    keys_out = CORRESPONDING #( keys ).
+                    keys_out[ 1 ]-%param-NewStatus = c_flow_status-completed.
+                    setflowstatus( EXPORTING keys = keys_out
+                                   CHANGING  reported = reported
+                                             failed = failed ).
+                ENDIF.
+
+                valid = VALUE #( ( WfinstMain = fields-WfinstMain
+                                   %param = VALUE #( Valid = status_ok ) ) ).
+            ENDIF.
+        ELSE.
+            transition_err_msg = NEW ZCL_EPPM_MESSAGEWRAPPER(
+                                    TEXTID   = ZCL_EPPM_MESSAGEWRAPPER=>ERROR_READ_DP_HDR
+                                    SEVERITY = IF_ABAP_BEHV_MESSAGE=>SEVERITY-ERROR
+                                    DP_GUID  = flow-DecisionGuID
+                                    SUBRC = sy-subrc ).
+        ENDIF.
+    ENDIF.
+
+    IF transition_err_msg IS NOT INITIAL.
+        APPEND VALUE #( %MSG = transition_err_msg ) TO REPORTED-ZI_PPM_DECPNT_APPR.
+        APPEND VALUE #( %tky = fields-%tky ) TO failed-zi_ppm_decpnt_appr.
+    ENDIF.
+  ENDMETHOD.
+
+* check if the portfolio item status has been set correctly
+  METHOD itemStatusSet.
+    DATA(fields) = keys[ 1 ].
+
+    "read the status of the portfolio item
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+       ENTITY zi_ppm_decpnt_appr
+        FIELDS ( ItemGuID ) WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+        RESULT DATA(flows)
+        FAILED failed
+        REPORTED reported.
+
+    IF failed-zi_ppm_decpnt_appr IS INITIAL.
+        DATA(flow) = flows[ 1 ].
+
+        SELECT SINGLE ProjectPortfolioItemStatus FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+         WHERE ProjectPortfolioItemUUID = @flow-ItemGuID
+         INTO @DATA(item_status).
+
+        DATA status_ok TYPE abap_boolean VALUE IS INITIAL.
+
+        IF item_status = c_pi_status-approved.
+            "the portfolio item has been updated as we expected
+            status_ok = 'X'.
+
+            "update the workflow header status
+            DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_appr~setFlowStatus.
+            keys_out = CORRESPONDING #( keys ).
+            keys_out[ 1 ]-%param-NewStatus = c_flow_status-dp_status_pending.   "decision point status set will always follow
+            setflowstatus( EXPORTING keys = keys_out
+                           CHANGING  reported = reported
+                                     failed = failed ).
+        ENDIF.
+
+        valid = VALUE #( (  WfinstMain = fields-WfinstMain
+                            %param = VALUE #( Valid = status_ok ) ) ).
+    ENDIF.
+  ENDMETHOD.
+
+**********************************************************************
+* STEPS
+**********************************************************************
+  METHOD approve.
+     DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_step~record_decision.
+     keys_out = CORRESPONDING #( keys ).
+     keys_out[ 1 ]-%param-NewStatus = c_step_status-approved.
+     record_decision( EXPORTING keys = keys_out
+                      CHANGING  reported = reported
+                                failed   = failed ).
+  ENDMETHOD.
+
+  METHOD endorse.
+     DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_step~record_decision.
+     keys_out = CORRESPONDING #( keys ).
+     keys_out[ 1 ]-%param-NewStatus = c_step_status-endorsed.
+     record_decision( EXPORTING keys = keys_out
+                      CHANGING  reported = reported
+                                failed   = failed ).
+  ENDMETHOD.
+
+  METHOD reject.
+     DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_step~record_decision.
+     keys_out = CORRESPONDING #( keys ).
+     keys_out[ 1 ]-%param-NewStatus = c_step_status-rejected.
+     record_decision( EXPORTING keys = keys_out
+                      CHANGING  reported = reported
+                                failed   = failed ).
+  ENDMETHOD.
+
+  METHOD requestMoreInfo.
+     DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_step~record_decision.
+     keys_out = CORRESPONDING #( keys ).
+     keys_out[ 1 ]-%param-NewStatus = c_step_status-more_info_req.
+     record_decision( EXPORTING keys = keys_out
+                      CHANGING  reported = reported
+                                failed   = failed ).
+  ENDMETHOD.
+
+  METHOD putOnHold.
+     DATA keys_out TYPE TABLE FOR ACTION IMPORT zi_ppm_decpnt_step~record_decision.
+     keys_out = CORRESPONDING #( keys ).
+     keys_out[ 1 ]-%param-NewStatus = c_step_status-on_hold.
+     record_decision( EXPORTING keys    = keys_out
+                      CHANGING reported = reported
+                               failed   = failed ).
+  ENDMETHOD.
+
+  METHOD record_decision.
+    DATA(fields) = keys[ 1 ].
+    DATA(params) = fields-%param.
+
+    MODIFY ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+           ENTITY Step
+            UPDATE FIELDS ( Status Note ProcessorEmail )
+            WITH VALUE #(
+                ( StepUUID = fields-StepUUID
+                  Status = params-NewStatus
+                  Note = params-Note
+                  ProcessorEmail = params-ProcessorEmail )
+            )
+            FAILED failed
+            REPORTED reported.
+
+  ENDMETHOD.
+
+* get a url to the portfolio item screen which can be included in a link in the work items
+  METHOD getPortfolioItemURL.
+
+    DATA(fields) = keys[ 1 ].
+
+    DATA: full_url TYPE lcm_url,
+          flp_url TYPE lcm_url.
+
+*    CALL METHOD /ui2/cl_lsapi_manager=>create_flp_url( EXPORTING object = 'Shell'
+*                                                                 action = 'startWDA'
+*                                                       RECEIVING url = flp_url ).
+
+    CALL METHOD zcl_wrap_api_manager_dp=>zif_wrap_api_manager_dp~create_flp_url(  EXPORTING   object = 'Shell'
+                                                                                              action = 'startWDA'
+                                                                                  RECEIVING   url = flp_url ).
+
+    "correct client (is wrong in d41)
+    FIND FIRST OCCURRENCE OF '?sap-client=' IN flp_url MATCH OFFSET DATA(start_param).
+    DATA(start_index_client) = start_param + 12.
+    REPLACE SECTION OFFSET start_index_client LENGTH 3 OF flp_url WITH sy-mandt.
+
+    "read the flow header to get the portfolio item GUID
+    READ ENTITIES OF zi_ppm_decpnt_appr IN LOCAL MODE
+       ENTITY zi_ppm_decpnt_appr
+        FIELDS ( ItemGuID ) WITH VALUE #( ( WfinstMain = fields-WfinstMain ) )
+        RESULT DATA(flow)
+        FAILED failed
+        REPORTED reported.
+
+    IF failed-zi_ppm_decpnt_appr IS INITIAL.
+        DATA(portfolio_item_uuid) = flow[ 1 ]-ItemGuID.
+
+*    portfolio_item_uuid = '5F130FA3A00A1FE1849EF2D5C529252A'.
+
+        "read the portfolio item details for parent bucket and portfolio UUIDs
+        SELECT SINGLE ProjectPortfolioUUID,
+                      ProjectPortfolioItemUUID,
+                      ProjPrtfloItemParentObjectUUID FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+         WHERE ProjectPortfolioItemUUID = @portfolio_item_uuid
+         INTO @DATA(portfolio_item).
+
+        "build the url
+        full_url = flp_url &&       |?APPL_MODE=2&APPL_TYPE=RPM&CTX_PARENT_GUID={ portfolio_item-ProjectPortfolioUUID }| &&
+                                    |&CTX_PARENT_TYPE=RPH&EDIT_MODE=2&IS_STATUS_LOCKED=&MAIN_PORTFOLIO_GUID=00000000000000000000000000000000| &&
+                                    |&OBJECT_GUID={ portfolio_item-ProjectPortfolioItemUUID }| &&
+                                    |&OBJECT_ID=&OBJECT_TYPE=RIH&PARENT_GUID={ portfolio_item-ProjPrtfloItemParentObjectUUID }| &&
+                                    |&PARENT_ID=&PARENT_TYPE=RBH&PORTAL_ROLE=RPM_PORT&PORTFOLIO_GUID={ portfolio_item-ProjectPortfolioUUID }| &&
+                                    |&PORTFOLIO_ID=&VIEW_TEMP=&sap-app-origin-hint=&sap-system=S4PPM&sap-ui2-wd-app-id=RPM_ITEM_DETAILS&| &&
+                                    |sap-ui2-wd-conf-id=RPM_ITEM_DETAILS_CFG&sap-ushell-navmode=explace&sap-ie=edge&sap-theme=sap_horizon&sap-touch=0|.
+
+        portfolio_item_url = VALUE #(
+                        ( WfinstMain = fields-WfinstMain
+                          %param = VALUE #( Url = full_url )
+                        )
+                    ).
+    ENDIF.
+
+
+  ENDMETHOD.
+
+ENDCLASS.
