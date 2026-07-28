@@ -1,0 +1,16 @@
+@AccessControl.authorizationCheck: #MANDATORY
+@EndUserText.label: 'Employee Position'
+@Metadata.ignorePropagatedAnnotations: true
+define view entity ZI_EmployeePositionOP as select from I_EmployeePositionOP
+{
+    key EmploymentInternalID,
+    ValidityStartDate,
+    ValidityEndDate,
+    PersonnelNumber,
+    Employee,
+    FullName,
+    OrganizationalUnit,
+    StartDate,
+    EndDate,
+    Appointment
+}
