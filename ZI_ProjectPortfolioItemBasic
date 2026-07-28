@@ -1,0 +1,139 @@
+@AccessControl.authorizationCheck: #MANDATORY
+@EndUserText.label: 'Project Portfolio Item'
+@Metadata.ignorePropagatedAnnotations: true
+@ObjectModel.usageType:{
+  serviceQuality: #C,
+  sizeCategory: #L,
+  dataClass: #MIXED
+}
+@VDM.viewType: #BASIC
+define view entity ZI_ProjectPortfolioItemBasic
+  as select from           /rpm/item_d     as Item
+    left outer to one join /rpm/item_d_der as ItemDerived on ItemDerived.guid = Item.guid
+  association [1..1] to cgpl_text as _PPMTextEN on _PPMTextEN.langu = 'E' and $projection.ProjectPortfolioItemUUID = _PPMTextEN.guid
+  association [1..1] to I_ProjectPortfolioBasic    as _Portfolio         on $projection.ProjectPortfolioUUID = _Portfolio.ProjectPortfolioUUID
+  association [1..1] to I_ProjectPortfolioLanguage as _PortfolioLanguage on _PortfolioLanguage.IsDefaultLanguage = 'X'
+{
+  key Item.guid                                              as ProjectPortfolioItemUUID,
+      Item.external_id                                       as ProjectPortfolioItem,
+      
+      _Portfolio.ProjectPortfolioMasterLanguage              as ProjectPortfolioMasterLanguage,
+      _Portfolio.FiscalYearVariant                           as FiscalYearVariant,
+      _PortfolioLanguage.PrjPortfolioDefaultLanguage         as PrjPortfolioDefaultLanguage,
+      Item.portfolio_guid                                    as ProjectPortfolioUUID,
+      Item.parent_guid                                       as ProjPrtfloItemParentObjectUUID,
+      Item.category                                          as ProjectPortfolioItemCategory,
+      Item.subcategory                                       as ProjPortfolioItemSubcategory,
+      Item.phase                                             as ProjectPortfolioItemStage,
+      Item.ptype                                             as ProjectPortfolioItemGroup,
+      Item.ttype                                             as ProjPrtfloItemTechnologyType,
+      Item.riska                                             as ProjPrtfloItmAssessedRiskValue,
+      Item.probt                                             as ProjPrtfloItmProbltyTechSuccss,
+      Item.probc                                             as ProjPrtfloItmProbltyCommSuccss,
+      Item.headc                                             as ProjPrtfloItemHeadcountValue,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.costd                                             as ProjPrtfloItemDevelopmentCost,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.costl                                             as ProjectPortfolioItemLaunchCost,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.npv                                               as ProjPrtfloItmNPVAmount,
+      Item.currency                                          as ProjectPortfolioItemCurrency,
+      Item.location                                          as ProjectPortfolioItemLocation,
+      Item.geography                                         as ProjectPortfolioItemGeography,
+      cast(Item.rpm_changed_on as timestamp preserving type) as LastChangeDateTime,
+      Item.periodtype                                        as ProjPrtfloItmFinPeriodType,
+      Item.unit                                              as ProjPortfolioItemCapacityUnit,
+      Item.forecast_start                                    as ProjPrtfloItmFcstdStartDate,
+      Item.planned_start                                     as ProjPrtfloItmPlannedStartDate,
+      Item.actual_start                                      as ProjPrtfloItemActualStartDate,
+      Item.forecast_finish                                   as ProjPrtfloItmFcstdFinishDate,
+      Item.planned_finish                                    as ProjPrtfloItmPlannedFinishDate,
+      Item.actual_finish                                     as ProjPrtfloItemActualFinishDate,
+      Item.escalation                                        as ProjPortfolioItemIsEscalated,
+      Item.item_type                                         as ProjectPortfolioItemType,
+      Item.portfl_item_guid                                  as ProjPortfolioItemHeaderUUID,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.ecv                                               as ProjPrtfloItmExpdCommlValueAmt,
+      Item.priority_group                                    as ProjPortfolioItemPriorityGroup,
+      Item.changed_by                                        as ProjectPortfolioItemChangedBy,
+      Item.item_class                                        as ProjPrtfloItemClassification,
+      Item.status                                            as ProjectPortfolioItemStatus,
+      Item.cap_periodtype                                    as ProjPrtfloItmCapPlngPerdType,
+      Item.discount_rate                                     as ProjPortfolioItemDiscountRate,
+      Item.act_dpcpt_guid                                    as ProjPrtfloDcsnPointActiveUUID,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.frcst_bgt_total                                   as ProjPrtfloItmFcstdBdgtTotAmt,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.frcst_bgtannual                                   as ProjPrtfloItmFcstdBdgtAnnAmt,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.frcst_costtotal                                   as ProjPrtfloItmFcstdCostTotAmt,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      Item.frcst_cost_ytd                                    as ProjPrtfloItemYTDFcstdCost,
+      Item.template_guid                                     as ProjPortfolioItemTemplateUUID,
+      ItemDerived.risk_prcnt                                 as ProjPortfolioItemRiskPercent,
+      ItemDerived.risk_group                                 as ProjectPortfolioItemRiskGroup,
+      ItemDerived.risk_icon                                  as ProjectPortfolioItemRiskIcon,
+      ItemDerived.derived_risk                               as ProjPortfolioItemDerivedRisk,
+      ItemDerived.headc_actual                               as ProjPrtfloItemActualHeadNmbrOf,
+      ItemDerived.priority_icon                              as ProjPortfolioItemPriorityIcon,
+      ItemDerived.phase_icon                                 as ProjPortfolioItemPhaseIcon,
+      ItemDerived.budget_icon                                as ProjectPortfolioItemBudgetIcon,
+      ItemDerived.schedule_icon                              as ProjPortfolioItemScheduleIcon,
+      ItemDerived.staffing_icon                              as ProjPortfolioItemStaffingIcon,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.budget_total                               as ProjPrtfloItmBudgetTotalAmount,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.budget_annual                              as ProjPrtfloItmBdgtAnnualAmount,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.planned_cost                               as ProjPortfolioItemPlannedCost,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.planned_cost_ytd                           as ProjPrtfloItemYTDPlannedCost,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.actual_cost                                as ProjectPortfolioItemActualCost,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.actual_cost_ytd                            as ProjPrtfloItmYTDActualCost,
+      ItemDerived.proposal                                   as ProjectPortfolioItemIsProposal,
+      ItemDerived.status_group                               as ProjPortfolioItemStatusGroup,
+      ItemDerived.workeffort_total                           as ProjPrtfloItemWorkEffortTotal,
+      ItemDerived.workeffort_ytd                             as ProjPrtfloItmYTDWorkEffort,
+      ItemDerived.planned_effort                             as ProjectPortfolioItemWorkEffort,
+      ItemDerived.planned_efrtytd                            as ProjPrtfloItemYTDPlannedEffort,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.roi                                        as ProjPrtfloItmRetOnInvmtAmount,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.irr                                        as ProjPrtfloItmIntRateOfRetAmt,
+      ItemDerived.risk_group_d                               as ProjPrtfloItemDerivedRiskGroup,
+      ItemDerived.risk_d_icon                                as ProjPrtfloItemDerivedRiskIcon,
+      @Semantics.quantity.unitOfMeasure:'ProjPortfolioItemCapacityUnit'
+      ItemDerived.forcted_duration                           as ProjPrtfloItmFcstdDuration,
+      @Semantics.quantity.unitOfMeasure:'ProjPortfolioItemCapacityUnit'
+      ItemDerived.planned_duration                           as ProjPrtfloItemPlannedDuration,
+      @Semantics.quantity.unitOfMeasure:'ProjPortfolioItemCapacityUnit'
+      ItemDerived.actual_duration                            as ProjPrtfloItemActualDuration,
+      ItemDerived.staffing_group                             as ProjPrtfloItmStfngStatusGroup,
+      ItemDerived.budget_group                               as ProjPrtfloItmBudgetStatusGroup,
+      ItemDerived.schedule_group                             as ProjPrtfloItmSchedStatusGroup,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.planned_revenue                            as ProjPrtfloItmPlndRevenueAmt,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.planned_rev_ytd                            as ProjPrtfloItmYTDPlannedRevenue,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.actual_revenue                             as ProjPortfolioItemActualRevenue,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.actual_rev_ytd                             as ProjPrtfloItemYTDActualRevenue,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.npv_plan                                   as ProjPrtfloItmNPVPlanAmount,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.irr_plan                                   as ProjPrtfloItmIntRateRetPlanAmt,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.roi_plan                                   as ProjPrtfloItmRetOnInvmtPlanAmt,
+      ItemDerived.payback_plan                               as ProjPrtfloItemPaybackPlanValue,
+      @Semantics.amount.currencyCode:'ProjectPortfolioItemCurrency'
+      ItemDerived.ecv_plan                                   as PrjPrtfloItmExpdCommlValPlnAmt,
+      _PPMTextEN.text1                                       as ProjPrtfloItmTextEN,
+
+      --Expose association
+      _Portfolio
+}
+where
+  Item.item_class <> '1' --exclude Items of Initiatives
