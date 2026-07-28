@@ -1,0 +1,11 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Decision Point Type'
+@Metadata.ignorePropagatedAnnotations: true
+define view entity ZI_ProjPrtfloItmDcsnPointType as select from /rpm/phase_t
+{
+    key langu as Langu,
+    key item_type as ItemType,
+    key phase_id as PhaseId,
+    phase_text as PhaseText
+} where langu = $session.system_language
