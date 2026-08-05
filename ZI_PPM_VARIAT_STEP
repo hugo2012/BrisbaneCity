@@ -1,0 +1,43 @@
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'Step of variation approval'
+@Metadata.ignorePropagatedAnnotations: true
+define view entity ZI_PPM_VARIAT_STEP 
+as select from zppm_variat_step
+  association to parent ZI_PPM_VARIAT_APPR as _Header
+    on  $projection.WfinstMain = _Header.WfinstMain 
+  association to ZI_PPM_VARIAT_STATUS as _Status
+    on  _Status.StepApplicable = 'X' and
+        $projection.Status = _Status.Status
+ association [0..1] to ZI_PPM_VARIATION_HEAD as _var_head
+ on $projection.variation_number = _var_head.Qmnum       
+{
+  key step_uuid as StepUUID,
+  wfinst_main as WfinstMain,
+  counter as Counter,
+  status as Status,
+  _Status.StatusText as StatusText,
+  note as Note,
+  workflow_seq_var as WorkflowSequeVar,
+  workflow_seq as WorkflowSequence,
+  workflow_action as WorkflowAction,
+  govern_role as GovernanceRole,
+  position_id as PositionID,
+  message as MessageText,
+  holder_summary as HolderSummary,
+  processed_by as ProcessorEmail,
+  variation_number as variation_number,
+  variation_type as variation_type_id,
+  _var_head.VarReason as VarReason_id,
+  @Semantics.user.createdBy: true
+  local_created_by as LocalCreatedBy,
+  @Semantics.systemDateTime.createdAt: true
+  local_created_at as LocalCreatedAt,
+  @Semantics.user.localInstanceLastChangedBy: true
+  local_last_changed_by as LocalLastChangedBy,
+  @Semantics.systemDateTime.localInstanceLastChangedAt: true
+  local_last_changed_at as LocalLastChangedAt,
+  @Semantics.systemDateTime.lastChangedAt: true
+  last_changed_at as LastChangedAt,
+  _Header,
+  _Status
+}
