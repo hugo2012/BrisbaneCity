@@ -1,0 +1,19 @@
+@EndUserText.label : 'Decision point status'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #ALLOWED
+define table zppm_variat_stat {
+
+  key client            : abap.clnt not null;
+  key step_applicable   : abap_boolean not null;
+  key flow_applicable   : abap_boolean not null;
+  key status            : numc5 not null;
+  status_text           : text40;
+  local_created_by      : abp_creation_user;
+  local_created_at      : abp_creation_tstmpl;
+  local_last_changed_by : abp_locinst_lastchange_user;
+  local_last_changed_at : abp_locinst_lastchange_tstmpl;
+  last_changed_at       : abp_lastchange_tstmpl;
+
+}
