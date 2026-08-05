@@ -1,0 +1,37 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'Tracking Steps for Variation worflow'
+@Metadata.ignorePropagatedAnnotations: true
+@ObjectModel.usageType:{
+    serviceQuality: #X,
+    sizeCategory: #S,
+    dataClass: #MIXED
+}
+@VDM.viewType: #BASIC
+define view entity ZI_PPM_VARIATION_STEPS as select from zppm_variat_step
+{
+   key step_uuid,
+   key wfinst_main,
+   key  counter as Counter,
+    wi_id as WorkitemId,
+    ppm_item as PpmItem,
+    variation_number as VariationNumber,
+    variation_type as VariationType,
+    status as Status,
+    note as Note,
+    workflow_seq_var as WorkflowSeqVar,
+    workflow_seq as WorkflowSeq,
+    workflow_action as WorkflowAction,
+    prjrole_role as PrjroleRole,
+    govern_role as GovernRole,
+    position_id as PositionId,
+    message as Message,
+    holder_summary as HolderSummary,
+    processed_by as ProcessedBy,
+    local_created_by as LocalCreatedBy,
+    local_created_at as LocalCreatedAt,
+    local_last_changed_by as LocalLastChangedBy,
+    local_last_changed_at as LocalLastChangedAt,
+    last_changed_at as LastChangedAt
+    
+}
