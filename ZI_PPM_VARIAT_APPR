@@ -1,0 +1,67 @@
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'Variation approval'
+@Metadata.ignorePropagatedAnnotations: true
+define root view entity ZI_PPM_VARIAT_APPR 
+as select from zppm_variat_appr
+  composition [0..*] of ZI_PPM_VARIAT_STEP as _Steps
+  association [0..1] to ZI_PPM_VARIAT_STATUS as _FlowStatus
+    on  _FlowStatus.FlowApplicable = 'X' and
+        $projection.Status = _FlowStatus.Status
+  association [0..1] to ZI_PPM_VARIAT_STEP as _CurrentStep
+    on  $projection.CurrentStepUUID = _CurrentStep.StepUUID
+  association [0..1] to ZI_PPM_VARIAT_STEP as _FinalStep
+    on  $projection.FinalStepUUID = _FinalStep.StepUUID
+  association [0..1] to I_User as _Initiator
+    on $projection.InitiatedByUser = _Initiator.UserID
+{
+  key wfinst_main as WfinstMain,
+  wfinst_appr as WfinstAppr,
+  decision_guid as DecisionGuID,
+  item_guid as ItemGuID,
+  status as Status,
+  _FlowStatus.StatusText as StatusText,
+  
+  invest_app_req as InvestmentApprovalRequired,
+  initiated_by as InitiatedByUser,
+  _Initiator._AddrCurDefaultEmailAddress.EmailAddress as InitiatedByEmail,
+  variation_number,
+  case 
+    when $projection.InitiatedByEmail is null then $projection.InitiatedByUser
+    else $projection.InitiatedByEmail
+  end as InitiatedByText,
+  
+  current_step_uuid as CurrentStepUUID,
+  _CurrentStep.HolderSummary as ApproverSummary,
+  
+  final_step_uuid as FinalStepUUID,
+  _FinalStep.Counter as FinalStepCounter,
+  _FinalStep.Status as FinalStepStatus,
+  _FinalStep._Status.StatusText as FinalStepStatusText,
+  _FinalStep.LocalLastChangedBy as FinalAgentUserID,
+  _FinalStep.LocalLastChangedBy as FinalAgentFullName,
+  _FinalStep.GovernanceRole as FinalAgentRole,
+ 
+  case _FinalStep.Status
+    when '00010' then 'A Request for more Information was made'
+    when '00020' then 'The Variation was requested to be put On Hold'
+    when '00030' then 'The Variation was declined'
+    when '00060' then 'The Variation Point was endorsed'
+    when '00070' then 'The Variation Point was approved'
+    else '?'
+  end as FinalStepSummary,
+  
+//  @Semantics.user.createdBy: true
+  local_created_by as LocalCreatedBy,
+  @Semantics.systemDateTime.createdAt: true
+  local_created_at as LocalCreatedAt,
+  @Semantics.user.localInstanceLastChangedBy: true
+  local_last_changed_by as LocalLastChangedBy,
+  @Semantics.systemDateTime.localInstanceLastChangedAt: true
+  local_last_changed_at as LocalLastChangedAt,
+  @Semantics.systemDateTime.lastChangedAt: true
+  last_changed_at as LastChangedAt,
+  _Steps,
+  _FlowStatus,
+  _FinalStep,
+  _Initiator
+}
