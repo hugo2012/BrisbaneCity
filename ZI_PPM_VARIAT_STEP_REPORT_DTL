@@ -1,0 +1,42 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'Workflow Report for PPM Variation'
+@Metadata.ignorePropagatedAnnotations: true
+@ObjectModel.usageType:{
+    serviceQuality: #X,
+    sizeCategory: #S,
+    dataClass: #MIXED
+}
+define view entity ZI_PPM_VARIAT_STEP_REPORT_DTL  as select from ZI_PPM_VARIAT_STEP_REPORT
+    association to ZI_ProjectPortfolioItemBasic as _PortfolioItem
+                   on $projection.PortfolioItemGuID = _PortfolioItem.ProjectPortfolioItemUUID
+    association to ZI_ProjPrtfloItmDcsnPointBasic as _DecisionPoint
+                   on $projection.DecisionPointGuID = _DecisionPoint.ProjPrtfloItmDcsnPointUUID
+
+{
+    key StepUUID,
+    PPMWorkflowID,
+    PPMWorkflowText,
+    VariationType,
+    VariationReason,
+    WorkflowSequence,
+    WorkflowGovernanceRole,
+    WorkflowAction,
+    StatusText,
+    Note,
+    Agent,
+    ProcessorEmail,
+    LocalLastChangedAt,
+    PortfolioItemGuID,
+    DecisionPointGuID,
+    ParentWorkflowGUID,
+    _PortfolioItem.ProjectPortfolioItem as PortfolioItem,
+    _PortfolioItem.ProjPrtfloItmTextEN as PortfolioItemTextEN,
+    _PortfolioItem,
+    
+    _DecisionPoint.ProjPrtfloItemDecisionPoint as DecisionPoint,
+    _DecisionPoint.ProjPrtfloItmDcsnPtTextEN as DecisionPointTextEN,
+    _DecisionPoint,
+    
+    _AllSteps
+}
