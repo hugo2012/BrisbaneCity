@@ -1,0 +1,22 @@
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'Variation Status'
+@Metadata.ignorePropagatedAnnotations: true
+define root view entity ZI_PPM_VARIAT_STATUS
+ as select from zppm_variat_stat as Status
+{
+  key step_applicable as StepApplicable,
+  key flow_applicable as FlowApplicable,
+  key status as Status,
+  status_text as StatusText,
+  @Semantics.user.createdBy: true
+  local_created_by as LocalCreatedBy,
+  @Semantics.systemDateTime.createdAt: true
+  local_created_at as LocalCreatedAt,
+  @Semantics.user.localInstanceLastChangedBy: true
+  local_last_changed_by as LocalLastChangedBy,
+  @Semantics.systemDateTime.localInstanceLastChangedAt: true
+  local_last_changed_at as LocalLastChangedAt,
+  @Semantics.systemDateTime.lastChangedAt: true
+  last_changed_at as LastChangedAt
+  
+}
