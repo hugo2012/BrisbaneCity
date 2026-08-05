@@ -1,0 +1,66 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Workflow Step (DP & Variation)'
+@Metadata.ignorePropagatedAnnotations: true
+define view entity ZI_PPM_WORKFLOW_STEP as select from ZI_PPM_DECPNT_STEP
+{
+    key StepUUID,
+    'DECPNT' as PPMWorkflowID,
+    WfinstMain,
+    Counter,
+    Status,
+    StatusText,
+    Note,
+    //WorkflowSequeVar,
+    WorkflowSequence,
+    cast('' as abap_boolean) as IsVariationSequence,
+    WorkflowAction,
+    GovernanceRole,
+    PositionID,
+    MessageText,
+    HolderSummary,
+    ProcessorEmail,
+    variation_number as VarNo,
+    variation_type_id as VarType,
+    VarReason_id,
+    LocalCreatedBy,
+    LocalCreatedAt,
+    LocalLastChangedBy,
+    LocalLastChangedAt,
+    LastChangedAt
+} union all select from ZI_PPM_VARIAT_STEP {
+    key StepUUID,
+    'VARIAT' as PPMWorkflowID,
+    WfinstMain,
+    Counter,
+    Status,
+    StatusText,
+    Note,
+    //WorkflowSequeVar,
+    //WorkflowSequence,
+    
+    case WorkflowSequence
+        when '00' then WorkflowSequeVar
+        else WorkflowSequence
+    end as WorkflowSequence,
+    
+    case WorkflowSequence
+        when '00' then cast('X' as abap_boolean)
+        else cast('' as abap_boolean)
+        end as IsVariationSequence,
+    
+    WorkflowAction,
+    GovernanceRole,
+    PositionID,
+    MessageText,
+    HolderSummary,
+    ProcessorEmail,
+    variation_number as VarNo,
+    variation_type_id as VarType,
+    VarReason_id,
+    LocalCreatedBy,
+    LocalCreatedAt,
+    LocalLastChangedBy,
+    LocalLastChangedAt,
+    LastChangedAt
+}
