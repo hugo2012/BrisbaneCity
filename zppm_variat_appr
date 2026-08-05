@@ -1,0 +1,25 @@
+@EndUserText.label : 'Approval flow for variation status change'
+@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+@AbapCatalog.dataMaintenance : #RESTRICTED
+define table zppm_variat_appr {
+
+  key client            : abap.clnt not null;
+  key wfinst_main       : rpm_tv_guid not null;
+  wfinst_appr           : sysuuid_x16;
+  variation_number      : qmnum;
+  item_guid             : rpm_tv_guid;
+  invest_app_req        : abap_boolean;
+  status                : numc5;
+  final_step_uuid       : sysuuid_x16;
+  current_step_uuid     : sysuuid_x16;
+  initiated_by          : abp_creation_user;
+  decision_guid         : rpm_tv_guid not null;
+  local_created_by      : abp_creation_user;
+  local_created_at      : abp_creation_tstmpl;
+  local_last_changed_by : abp_locinst_lastchange_user;
+  local_last_changed_at : abp_locinst_lastchange_tstmpl;
+  last_changed_at       : abp_lastchange_tstmpl;
+
+}
