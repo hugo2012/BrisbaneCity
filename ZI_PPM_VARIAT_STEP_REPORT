@@ -1,0 +1,52 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Variation Step report'
+@Metadata.ignorePropagatedAnnotations: true
+@ObjectModel.usageType:{
+    serviceQuality: #X,
+    sizeCategory: #S,
+    dataClass: #MIXED
+}
+define view entity ZI_PPM_VARIAT_STEP_REPORT as select from ZI_PPM_VARIAT_STEP
+ -- 1. Modified Join/Association logic for Notification Type Text
+  association [0..1] to I_NotificationTypeName as _variat_type_text
+    on  $projection.variation_type_id = _variat_type_text.NotificationType
+    and _variat_type_text.Language    = $session.system_language
+  association [0..1] to I_NotificationType  as _variat_type  
+    on  $projection.variation_type_id = _variat_type.NotificationType
+ association [0..1] to ZI_EPPM_VARIATION_RES as _var_reason
+ on $projection.VarReason_id = _var_reason.VarReas
+{
+    key StepUUID,
+    
+    'VARIAT' as PPMWorkflowID,
+    'EPPM Variation Workflow' as PPMWorkflowText,
+     _variat_type_text.NotificationTypeName  as VariationType,
+    _var_reason.VarReasDesc as VariationReason,
+    variation_number,
+    case 
+        when WorkflowSequeVar is not initial 
+          then cast( WorkflowSequeVar as abap.numc(2) )
+        when WorkflowSequence is not initial 
+          then cast( WorkflowSequence as abap.numc(2) )
+        else cast( '00' as abap.numc(2) )
+      end       as WorkflowSequence,
+    
+    GovernanceRole as WorkflowGovernanceRole,
+    WorkflowAction,
+    VarReason_id,
+    StatusText,
+    Note,  
+    ProcessorEmail,
+    LocalLastChangedAt,  
+    HolderSummary as Agent,
+    variation_type_id,
+    _Header.ItemGuID as PortfolioItemGuID,
+    _Header.DecisionGuID as DecisionPointGuID,
+    _Header.WfinstMain as ParentWorkflowGUID, 
+    _Header.LocalCreatedAt as ParentWorkflowCreatedAt,
+    //_Header._Initiator.DefaultEmailAddress as ParentWorkflowInitiatorEmail,
+    _Header.DecisionGuID as DecisionGuID,  
+    _Header._Steps as _AllSteps
+      
+}
