@@ -1,0 +1,70 @@
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'Workflow Report for PPM'
+@Metadata.ignorePropagatedAnnotations: true
+define view entity ZI_PPM_WORKFLOW_REPORT as select from ZI_PPM_DECPNT_STEP_REPORT_DTL
+{
+    key StepUUID,
+    
+    @ObjectModel.text.element: ['PPMWorkflowText']
+    PPMWorkflowID,
+    PPMWorkflowText,
+    VariationType,
+    VariationReason,
+    WorkflowSequence,
+    WorkflowGovernanceRole,
+    WorkflowAction,
+    StatusText,
+    Note,
+    Agent,
+    ProcessorEmail,
+    LocalLastChangedAt,
+    PortfolioItemGuID,
+    
+    @ObjectModel.text.element: ['PortfolioItemTextEN']
+    @Consumption.valueHelpDefinition: [{  entity: {   name: 'ZI_ProjectPortfolioItemVH' , 
+                                                      element: 'ProjectPortfolioItem'  }     }]
+    PortfolioItem,
+    PortfolioItemTextEN,
+    DecisionPointGuID,
+    
+    @ObjectModel.text.element: ['DecisionPointTextEN']
+    @Consumption.valueHelpDefinition: [{  entity: {   name: 'ZI_ProjPrtfloItmDcsnPntType_VH' , 
+                                                      element: 'DPType'  }     }]
+    DecisionPoint,
+    DecisionPointTextEN,
+    
+    //DecisionPoint workflow specific
+    ParentWorkflowGUID as PPMWorkflowUUID
+    //_AllSteps
+    
+} union all select from ZI_PPM_VARIAT_STEP_REPORT_DTL {
+    key StepUUID,
+    
+    PPMWorkflowID,
+    PPMWorkflowText,
+    VariationType,
+    VariationReason,
+    WorkflowSequence,
+    WorkflowGovernanceRole,
+    WorkflowAction,
+    StatusText,
+    Note,
+    Agent,
+    ProcessorEmail,
+    LocalLastChangedAt,
+    PortfolioItemGuID,
+    
+    PortfolioItem,
+    PortfolioItemTextEN,
+    DecisionPointGuID,
+    
+    DecisionPoint,
+    DecisionPointTextEN,
+    
+    //DecisionPoint workflow specific
+    ParentWorkflowGUID as PPMWorkflowUUID
+    //_AllSteps
+
+}
+
