@@ -1,0 +1,1660 @@
+CLASS zcl_ppm_rpm_fico_int DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_badi_interface .
+    INTERFACES if_ex_rpm_fico_intf .
+
+    TYPES:
+      BEGIN OF ty_prps,
+        posid TYPE ps_posid,
+        objnr TYPE j_objnr,
+        psphi TYPE ps_psphi,
+        poski TYPE ps_poski,
+        pbukr TYPE ps_pbukr,
+        pkokr TYPE ps_pkokr,
+        stufe TYPE ps_stufe,
+        pwpos TYPE ps_pwpos,
+        usr11 TYPE usr11prps,
+      END OF ty_prps .
+    TYPES:
+      tt_prps   TYPE TABLE OF ty_prps .
+    TYPES:
+      tt_valmap TYPE TABLE OF zppm001 .
+    TYPES:
+      BEGIN OF ty_data,
+        objnr_prps TYPE prps-objnr,
+        qmnum      TYPE viqmel-qmnum,  " -- Notification number (vd 400000062)
+        psp_nr     TYPE viqmel-psp_nr,      " -- wbs element
+        qmart      TYPE viqmel-qmart,
+        qmdab      TYPE viqmel-qmdab,
+        objnr      TYPE  jest-objnr ,         " -- Object number của notification      END OF ty_data .
+        estat      TYPE  tj30t-estat  ,          " -- Status code (e0001, e0002…)  types:
+        txt04      TYPE  tj30t-txt04 ,         " -- Short text: noco, appr…    tt_data   TYPE TABLE OF ty_data .
+        txt30      TYPE tj30t-txt30  ,         " -- Description
+        wtg        TYPE /noveco/var_cost_alv-wtg,
+        twaer      TYPE /noveco/var_cost_alv-twaer,
+        wog        TYPE /noveco/var_cost_alv-wog,
+        owaer      TYPE /noveco/var_cost_alv-owaer,
+        kstar      TYPE /noveco/var_cost_alv-kstar,
+        wrttp      TYPE v_coss_view-wrttp,
+        versn      TYPE v_coss_view-versn,
+        gjahr      TYPE v_coss_view-gjahr,
+        perio      TYPE rpm_ts_fico_coll-perid,
+      END OF ty_data .
+    TYPES:
+      tt_data   TYPE TABLE OF ty_data .
+
+    DATA projid TYPE rpm_tv_if_fi_proj_id .
+    DATA wbscurr TYPE waers .
+*  data I_COSP_04 type TY_COSP .
+    DATA i_data TYPE tt_data .
+    DATA i_data_coss TYPE tt_data .
+*  data I_COSP type TY_COSP .
+    DATA cofp_objcurr TYPE waers .
+    DATA cosp_objcurr TYPE waers .
+    DATA cosp_curr TYPE waers .
+    DATA cofp_curr TYPE waers .
+    DATA fiscyear_var TYPE periv .
+    DATA it_valmap TYPE tt_valmap .
+    DATA logsys TYPE logsys .
+    DATA i_prps TYPE tt_prps .
+    DATA i_cofp TYPE ad01cofpttyp .
+
+    METHODS fetch_coss_data
+      IMPORTING
+        !is_task_objlink     TYPE rpm_r3fi_objlink
+        !it_icwbscst         TYPE rpm_tt_icwbscst
+      CHANGING
+        !ct_cost_object_data TYPE rpm_tt_fico_coll .
+    METHODS map_covp
+      IMPORTING
+        !is_covp         TYPE covp
+        !is_task_objlink TYPE rpm_r3fi_objlink
+      EXPORTING
+        !et_codata       TYPE rpm_tt_fico_coll .
+protected section.
+private section.
+
+  constants C_MAX_100000 type KAEP_SETT-MAXSEL value 100000 ##NO_TEXT.
+  constants C_PROF_DB_000000000001 type CHAR24 value 000000000001 ##NO_TEXT.
+  constants C_KOKRS_4000 type KOKRS value 4000 ##NO_TEXT.
+  constants C_KOKRS_1000 type KOKRS value 1000 ##NO_TEXT.
+  data COVP_OBJCURR type WAERS .
+  data COVP_CURR type WAERS .
+  data I_COVP type ZTY_COVP .
+  constants C_VERSION type VERSN value 'N02' ##NO_TEXT.
+  data PERTYP_MONTH type RPM_TV_FIF_PERTYPE value 'M' ##NO_TEXT.
+  constants C_WRTTP_P3 type CO_WRTTP value 'P3' ##NO_TEXT.
+  constants C_BANK_PRJ_STOCK_VALT type CO_WRTTP value '11' ##NO_TEXT.
+
+  methods SUBMIT_CJI3
+    importing
+      !I_PRPS type TT_PRPS
+      !IV_PR type FLAG optional .
+  methods FILL_PERIOD_DATA_COVP
+    importing
+      !IS_COVP type COVP
+      !IS_TASK_OBJLINK type RPM_R3FI_OBJLINK
+      !IS_CODATA type RPM_TS_FICO_COLL
+      !IV_INVERSE_SIGN type FLAG optional
+    exporting
+      !CT_CODATA type RPM_TT_FICO_COLL .
+  methods GET_PROJECT_AMOUNT
+    importing
+      !IS_TASK_OBJLINK type RPM_R3FI_OBJLINK
+    exporting
+      !ET_MSG type RPM_TT_BALMSG
+    changing
+      !CT_OBJ type RPM_TT_FICO_COLL .
+  methods FETCH_CJI3
+    importing
+      !IS_TASK_OBJLINK type RPM_R3FI_OBJLINK
+      !IT_ICWBSCST type RPM_TT_ICWBSCST
+    changing
+      !CT_COST_OBJECT_DATA type RPM_TT_FICO_COLL .
+ENDCLASS.
+
+
+
+CLASS ZCL_PPM_RPM_FICO_INT IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PPM_RPM_FICO_INT->FILL_PERIOD_DATA_COVP
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_COVP                        TYPE        COVP
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IS_CODATA                      TYPE        RPM_TS_FICO_COLL
+* | [--->] IV_INVERSE_SIGN                TYPE        FLAG(optional)
+* | [<---] CT_CODATA                      TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD fill_period_data_covp.
+* handle entries for each period
+    DATA: lo_stru_ref TYPE REF TO cl_abap_structdescr,
+          lt_codata   TYPE TABLE OF rpm_ts_fico_coll,
+          ls_codata   TYPE  rpm_ts_fico_coll.
+    FIELD-SYMBOLS: <lf_curr> TYPE wogxxx.
+
+    ls_codata = is_codata. "fill all common fields
+
+* we need only the first 12 fields from WOG001 to WOG012
+*      check if the field name is greater than 12
+
+*      IF ls_fld-name+3(3) LE '012'.
+*    ASSIGN COMPONENT ls_fld-name OF STRUCTURE is_covp TO <lf_curr>.
+*    IF <lf_curr> IS ASSIGNED AND <lf_curr> IS NOT INITIAL.
+
+    IF fiscyear_var IS INITIAL.
+
+      READ TABLE i_prps INTO DATA(ls_prps) WITH KEY objnr = is_task_objlink-objnr.
+
+      IF sy-subrc IS NOT INITIAL.
+        READ TABLE i_prps INTO ls_prps WITH KEY poski = is_task_objlink-objid2.
+      ENDIF.
+      IF ls_prps IS NOT INITIAL.
+        SELECT SINGLE FiscalYearVariant FROM i_companycode INTO @fiscyear_var WHERE CompanyCode = @ls_prps-pbukr.
+      ENDIF.
+    ENDIF.
+
+* PERID
+    ls_codata-perid = is_covp-perio.
+
+    CALL FUNCTION 'G_POSTING_DATE_OF_PERIOD_GET'
+      EXPORTING
+        period              = ls_codata-perid
+        variant             = fiscyear_var
+        year                = ls_codata-fiscyear
+      IMPORTING
+        from_date           = ls_codata-strtdate
+        to_date             = ls_codata-enddate
+      EXCEPTIONS
+        period_not_defined  = 1
+        variant_not_defined = 2
+        OTHERS              = 3.
+
+* controlling area currency.
+    IF covp_curr IS INITIAL.
+      READ TABLE i_prps INTO ls_prps WITH KEY objnr = is_task_objlink-objnr.
+      IF sy-subrc IS NOT INITIAL.
+        READ TABLE i_prps INTO ls_prps WITH KEY poski = is_task_objlink-objid2.
+      ENDIF.
+      IF ls_prps IS NOT INITIAL.
+        SELECT SINGLE ControllingAreaCurrency FROM i_controllingarea INTO @covp_curr WHERE ControllingArea = @ls_prps-pkokr.
+      ENDIF.
+    ENDIF.
+
+    ls_codata-currency = covp_curr.
+
+*OBJCURR
+    IF covp_objcurr IS INITIAL.
+      SELECT currency FROM /rpm/item_d INTO covp_objcurr UP TO 1 ROWS WHERE external_id = is_task_objlink-projid .ENDSELECT.
+    ENDIF.
+
+    ls_codata-objcurr = covp_objcurr.
+*orgtype
+    ls_codata-orgtype = 'COA'.
+*Application
+    ls_codata-application = 'SAPCO'.
+*objtype
+    ls_codata-objtype = is_task_objlink-objnr(2).
+*objid1
+    ls_codata-objid1  = is_task_objlink-objid1.
+*objid2
+    ls_codata-objid2  = is_task_objlink-objid2.
+*LOGSYS
+    IF logsys IS INITIAL.
+      SELECT SINGLE logsys INTO ls_codata-logsys FROM t000 WHERE mandt = sy-mandt.
+      logsys = ls_codata-logsys.
+    ELSE.
+      ls_codata-logsys = logsys.
+    ENDIF.
+*PHASE
+    ls_codata-phase = 0.
+*PS_OBJ_CURR
+    ls_codata-ps_obj_curr = is_task_objlink-objcurr.
+
+*EXCHRATEDAT
+    ls_codata-exchratedat =  ls_codata-strtdate.
+*amount
+    ls_codata-amount = is_covp-wkgbtr.
+*    IF LS_CODATA-AMOUNT < 0 AND LS_CODATA-VALTYPE = 'ZR'."Commented 26/08/2025
+    IF iv_inverse_sign = 'X'."Inserted 26/08/2025
+      ls_codata-amount = ls_codata-amount * ( -1 ).
+    ENDIF.
+*objamnt
+*    DATA(lv_fldnam) = 'WOG' && ls_codata-perid.
+*    ASSIGN COMPONENT lv_fldnam OF STRUCTURE is_covp TO FIELD-SYMBOL(<lf_objcurr>).
+*    IF <lf_objcurr> IS ASSIGNED AND <lf_objcurr> IS NOT INITIAL.
+    ls_codata-objamt = is_covp-wkgbtr.
+*    IF ls_codata-objamt < 0 AND ls_codata-valtype = 'ZR'."Commented 26/08/2025
+    IF iv_inverse_sign = 'X'."Inserted 26/08/2025
+      ls_codata-objamt = ls_codata-objamt * ( -1 ).
+    ENDIF.
+*    ls_codata-objamt = ls_codata-amount.
+*    ls_codata-objamt = is_covp-WOGBTRO.
+*    ENDIF.
+*ls_codata-OBJCURR = is_covp-OWAER.
+    ls_codata-objcurr = is_covp-kwaer.
+    ls_codata-currency = is_covp-kwaer.
+*ls_codata-CURRENCY = is_covp-OWAER.
+
+    APPEND ls_codata TO lt_codata .
+
+*    CALL METHOD me->get_project_amount
+*      EXPORTING
+*        is_task_objlink = is_task_objlink
+*      CHANGING
+*        ct_obj          = lt_codata.
+*    READ TABLE lt_codata INTO ls_codata INDEX 1.
+    APPEND ls_codata TO ct_codata.
+    CLEAR: ls_codata, lt_codata.
+*    ENDIF.
+*      ENDIF.
+*    ENDLOOP.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PPM_RPM_FICO_INT->GET_PROJECT_AMOUNT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [<---] ET_MSG                         TYPE        RPM_TT_BALMSG
+* | [<-->] CT_OBJ                         TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+METHOD get_project_amount.
+  DATA: lv_excdat TYPE dats,
+        ls_msg    TYPE bal_s_msg.
+  DATA: lv_prof             TYPE bp_profil,
+        lv_applik           TYPE bp_applik,
+        lv_valtype          TYPE co_wrttp,
+        ls_profile          TYPE ts_profile,
+        lv_exctyp           TYPE kurst,
+        ls_inm_settings_val TYPE inm_ts_settings_val.
+  DATA: lr_badi       TYPE REF TO rpm_fico_intf.
+  GET BADI lr_badi.
+  FIELD-SYMBOLS: <fs_obj>  TYPE rpm_ts_fico_coll.
+
+  CALL METHOD cl_rpm_get_fico_data=>get_inm_gen_settings
+    RECEIVING
+      rs_inm_settings_val = ls_inm_settings_val.
+
+  IF is_task_objlink-projcurr IS NOT INITIAL.
+    LOOP AT ct_obj ASSIGNING <fs_obj> WHERE amount IS NOT INITIAL.
+      IF is_task_objlink-projcurr EQ <fs_obj>-currency.
+        <fs_obj>-objamt = <fs_obj>-amount.
+        <fs_obj>-objcurr = <fs_obj>-currency.
+      ELSEIF ( is_task_objlink-projcurr EQ <fs_obj>-ps_obj_curr )." AND              " Note 1756834
+*             ( <fs_obj>-objamt IS NOT INITIAL AND <fs_obj>-amount IS NOT INITIAL ). " Note 1756834
+        "Item currency is same as PS project element currency
+        <fs_obj>-objcurr = <fs_obj>-ps_obj_curr.
+      ELSE.
+        "Get exchange rate date and type
+
+        IF <fs_obj>-pertype EQ pertyp_month.
+*          no profile to be checked in case of monthly
+          lv_excdat = <fs_obj>-exchratedat.
+          lv_exctyp = ls_inm_settings_val-exch_rate_type.
+        ENDIF.                                                                                 "Note 2298957
+
+        IF lr_badi IS NOT INITIAL.
+          CALL BADI lr_badi->modify_exchange_rate
+            EXPORTING
+              iv_currency_from = <fs_obj>-currency
+              iv_currency_to   = is_task_objlink-projcurr
+              is_obj           = <fs_obj>
+            CHANGING
+              ev_date          = lv_excdat
+              ev_rate_type     = lv_exctyp.
+        ENDIF.
+
+        IF lv_excdat IS INITIAL.
+          lv_excdat = sy-datum.
+        ENDIF.
+
+        IF lv_exctyp IS INITIAL.      "donot pass the exchange rate type
+*     convert from Controlling area currency amount
+          CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+            EXPORTING
+              date             = lv_excdat
+              foreign_currency = is_task_objlink-projcurr
+              local_amount     = <fs_obj>-amount
+              local_currency   = <fs_obj>-currency
+            IMPORTING
+              foreign_amount   = <fs_obj>-objamt
+            EXCEPTIONS
+              no_rate_found    = 1
+              overflow         = 2
+              no_factors_found = 3
+              no_spread_found  = 4
+              derived_2_times  = 5
+              OTHERS           = 6.
+        ELSE.
+          CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+            EXPORTING
+              date             = lv_excdat
+              foreign_currency = is_task_objlink-projcurr
+              local_amount     = <fs_obj>-amount
+              local_currency   = <fs_obj>-currency
+              type_of_rate     = lv_exctyp
+            IMPORTING
+              foreign_amount   = <fs_obj>-objamt
+            EXCEPTIONS
+              no_rate_found    = 1
+              overflow         = 2
+              no_factors_found = 3
+              no_spread_found  = 4
+              derived_2_times  = 5
+              OTHERS           = 6.
+
+        ENDIF.
+        IF sy-subrc <> 0.
+          ls_msg-msgty = 'W'.
+          ls_msg-msgid = 'RPM_APPL'.
+          ls_msg-msgno = '019'.
+          ls_msg-msgv1 = <fs_obj>-currency.
+          ls_msg-msgv2 = is_task_objlink-projcurr.
+          ls_msg-msgv3 = is_task_objlink-objtype.
+          CONCATENATE is_task_objlink-objid1 ' ' is_task_objlink-objid2 INTO
+                 ls_msg-msgv4.
+          APPEND ls_msg TO et_msg.
+          <fs_obj>-objcurr = is_task_objlink-projcurr.
+          CLEAR: <fs_obj>-objamt.
+        ELSE.
+          <fs_obj>-objcurr = is_task_objlink-projcurr.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_ACTIVITY_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICCSTNWA                    TYPE        RPM_TT_ICCSTNWA
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD if_ex_rpm_fico_intf~convert_bw_activity_cost.
+
+*    CALL METHOD me->add_acttype
+*      EXPORTING
+*        is_task_objlink     = is_task_objlink
+*        i_view              = c_commit_costs
+*        i_category          = c_cat_commit_costs
+*        i_opex_grp          = c_opex_commit_costs
+*        i_capex_grp         = c_capex_commit_costs
+*      CHANGING
+*        ct_cost_object_data = ct_cost_object_data.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_COSTCENTER_BUDGET
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICCTRETT                    TYPE        RPM_TT_ICCTRETT
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_COSTCENTER_BUDGET.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_COSTCENTER_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICCTRCST                    TYPE        RPM_TT_ICCTRCST
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_COSTCENTER_COST.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_ELEMENT_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICCSTNAE                    TYPE        RPM_TT_ICCSTNAE
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_ELEMENT_COST.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_NETWORK_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICCSTNTW                    TYPE        RPM_TT_ICCSTNTW
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_NETWORK_COST.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_ORDER_BUDGET
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICORDBUD                    TYPE        RPM_TT_BW_ICORDBUD
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_ORDER_BUDGET.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_ORDER_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICORDCST                    TYPE        RPM_TT_BW_ICORDCST
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD IF_EX_RPM_FICO_INTF~CONVERT_BW_ORDER_COST.
+*    DATA: LV_PSPHI TYPE PS_PSPHI.
+**    we only need to check if the WBS is tagged as OPEX/CAPEX
+**    fetch the activity types from the RPM_V_FIN_MAP
+*
+**Start inserting by Sang.Tran on 05.09.2025 for SO (new requirement)
+*    CALL METHOD ME->FETCH_GOOD_ISSUE_CJI3
+*      EXPORTING
+*        IS_TASK_OBJLINK     = IS_TASK_OBJLINK
+*        IT_ICORDCST         = IT_ICORDCST
+*      CHANGING
+*        CT_COST_OBJECT_DATA = CT_COST_OBJECT_DATA.
+**End inserting by Sang.Tran on 05.09.2025
+*
+*    CHECK CT_COST_OBJECT_DATA IS NOT INITIAL.
+*
+*    SELECT SINGLE ACT_TYP_TO FROM /RPM/FIN_MAP INTO @DATA(LV_ACTIVITY_OPEX)
+*       WHERE
+*             FIN_VIEW = @C_TOTAL_PROJ_BUDGET
+*        AND  CATEGORY = @C_CAT_PROJ_BUDGET
+*        AND  GROUP_ID = @C_OPEX_PROJ_BUDGET.
+*
+*    SELECT SINGLE ACT_TYP_TO FROM /RPM/FIN_MAP INTO @DATA(LV_ACTIVITY_CAPEX)
+*          WHERE
+*                FIN_VIEW = @C_TOTAL_PROJ_BUDGET
+*           AND  CATEGORY = @C_CAT_PROJ_BUDGET
+*           AND  GROUP_ID = @C_CAPEX_PROJ_BUDGET.
+*
+**  fetch entries from PRPS for the new project
+*    CALL FUNCTION 'CONVERSION_EXIT_KONPD_INPUT'
+*      EXPORTING
+*        INPUT     = IS_TASK_OBJLINK-PROJID
+*      IMPORTING
+*        OUTPUT    = LV_PSPHI
+*      EXCEPTIONS
+*        NOT_FOUND = 1
+*        OTHERS    = 2.
+*    IF SY-SUBRC IS INITIAL.
+*
+*      READ TABLE I_PRPS
+*      WITH KEY
+*      PSPHI = LV_PSPHI
+*      TRANSPORTING NO FIELDS.
+*
+*      IF SY-SUBRC IS NOT INITIAL. " that means the data for this project was not loaded yet
+*
+** load the data for this project
+*
+*        SELECT POSID,OBJNR,PSPHI,POSKI,PBUKR,PKOKR,STUFE,PWPOS,USR11 FROM PRPS
+*         INTO TABLE @I_PRPS
+*         WHERE PSPHI = @LV_PSPHI.
+*
+*      ENDIF.
+*
+**      IF i_stufe IS SUPPLIED .
+**        DATA(lv_stufe) = i_stufe.
+**        IF lv_stufe IS INITIAL.
+**          lv_stufe = 2. " add act type to Level 2 WBse only
+**        ENDIF.
+**      ELSEIF i_stufe IS NOT SUPPLIED .
+**        lv_stufe = 2.
+**      ENDIF.
+*
+**      check if present loop is for a level 1/2 WBS
+*      READ TABLE I_PRPS INTO DATA(LS_PRPS)
+*      WITH KEY
+*       POSKI = IS_TASK_OBJLINK-OBJID2.
+*
+** loop at level 1/2 wbse only
+*      IF SY-SUBRC IS INITIAL  .
+*        LOOP AT CT_COST_OBJECT_DATA ASSIGNING FIELD-SYMBOL(<LF_FIDATA_TMP>) WHERE FISCYEAR IS NOT INITIAL.
+**        if we are processing a Level 2 wbs
+**        check if it is Opex or Capex
+*          IF LS_PRPS-USR11 = ABAP_TRUE.
+*            <LF_FIDATA_TMP>-ACTTYPE = LV_ACTIVITY_OPEX.
+*          ELSE.
+*            <LF_FIDATA_TMP>-ACTTYPE = LV_ACTIVITY_CAPEX.
+*          ENDIF.
+*
+*        ENDLOOP.
+*      ENDIF.
+*    ENDIF.
+**    CALL METHOD me->add_acttype
+**      EXPORTING
+**        is_task_objlink     = is_task_objlink
+**        i_view              = c_commit_costs
+**        i_category          = c_cat_commit_costs
+**        i_opex_grp          = c_opex_commit_costs
+**        i_capex_grp         = c_capex_commit_costs
+**      CHANGING
+**        ct_cost_object_data = ct_cost_object_data.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_ORDER_PLANCOST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICORDPLN                    TYPE        RPM_TT_ICORDPLN
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_ORDER_PLANCOST.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_WBS_BUDGET
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICWBSBUD                    TYPE        RPM_TT_ICWBSBUD
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD if_ex_rpm_fico_intf~convert_bw_wbs_budget.
+   DATA: lv_psphi TYPE ps_psphi.
+*    we only need to check if the WBS is tagged as OPEX/CAPEX
+*    fetch the activity types from the RPM_V_FIN_MAP
+*
+* check ct_cost_object_data is not initial.
+*
+*    SELECT SINGLE act_typ_to FROM /rpm/fin_map INTO @DATA(lv_activity_opex)
+*          WHERE
+*                fin_view = @c_total_proj_budget
+*           AND  category = @c_cat_proj_budget
+*           AND  group_id = @c_opex_proj_budget.
+*
+*    SELECT SINGLE act_typ_to FROM /rpm/fin_map INTO @DATA(lv_activity_capex)
+*          WHERE
+*                fin_view = @c_total_proj_budget
+*           AND  category = @c_cat_proj_budget
+*           AND  group_id = @c_capex_proj_budget.
+*
+**  fetch entries from PRPS for the new project
+*    CALL FUNCTION 'CONVERSION_EXIT_KONPD_INPUT'
+*      EXPORTING
+*        input     = is_task_objlink-projid
+*      IMPORTING
+*        output    = lv_psphi
+*      EXCEPTIONS
+*        not_found = 1
+*        OTHERS    = 2.
+*    IF sy-subrc IS INITIAL.
+*
+*      READ TABLE i_prps
+*      WITH KEY
+*      psphi = lv_psphi
+*      TRANSPORTING NO FIELDS.
+*
+*      IF sy-subrc IS NOT INITIAL. " that means the data for this project was not loaded yet
+*
+** load the data for this project
+*
+*        SELECT posid,objnr,psphi,poski,pbukr,pkokr,stufe,pwpos,usr11 FROM prps
+*         INTO TABLE @i_prps
+*         WHERE psphi = @lv_psphi.
+*
+*      ENDIF.
+*
+**      IF i_stufe IS SUPPLIED .
+**        DATA(lv_stufe) = i_stufe.
+**        IF lv_stufe IS INITIAL.
+**          lv_stufe = 2. " add act type to Level 2 WBse only
+**        ENDIF.
+**      ELSEIF i_stufe IS NOT SUPPLIED .
+**        lv_stufe = 2.
+**      ENDIF.
+*
+**      check if present loop is for a level 1/2 WBS
+*      READ TABLE i_prps INTO DATA(ls_prps)
+*      WITH KEY
+*       poski = is_task_objlink-taskid.
+*
+** loop at level 1/2 wbse only
+*      IF sy-subrc IS INITIAL  .
+*        LOOP AT ct_cost_object_data ASSIGNING FIELD-SYMBOL(<lf_fidata_tmp>)..
+**        if we are processing a Level 2 wbs
+**        check if it is Opex or Capex
+*          IF ls_prps-usr11 = abap_true.
+*            <lf_fidata_tmp>-acttype = lv_activity_opex.
+*          ELSE.
+*            <lf_fidata_tmp>-acttype = lv_activity_capex.
+*          ENDIF.
+*
+*        ENDLOOP.
+*      ENDIF.
+*    ENDIF.
+*
+**    CALL METHOD me->add_acttype
+**      EXPORTING
+**        is_task_objlink     = is_task_objlink
+**        i_view              = c_total_proj_budget
+**        i_category          = c_cat_proj_budget
+**        i_opex_grp          = c_opex_proj_budget
+**        i_capex_grp         = c_capex_proj_budget
+**      CHANGING
+**        ct_cost_object_data = ct_cost_object_data.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_WBS_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICWBSCST                    TYPE        RPM_TT_ICWBSCST
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD if_ex_rpm_fico_intf~convert_bw_wbs_cost.
+* Combine Notification data and internal cost
+    CALL METHOD me->fetch_coss_data
+      EXPORTING
+        is_task_objlink     = is_task_objlink
+        it_icwbscst         = it_icwbscst
+      CHANGING
+        ct_cost_object_data = ct_cost_object_data.
+* Fetching from CJI3 for value type 11
+    CALL METHOD me->fetch_cji3
+      EXPORTING
+        is_task_objlink     = is_task_objlink
+        it_icwbscst         = it_icwbscst
+      CHANGING
+        ct_cost_object_data = ct_cost_object_data.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_BW_WBS_PLANCOST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICWBSPLN                    TYPE        RPM_TT_ICWBSPLN
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_BW_WBS_PLANCOST.
+
+*        CALL METHOD me->add_acttype
+*      EXPORTING
+*        is_task_objlink     = is_task_objlink
+*        i_view              = c_commit_costs
+*        i_category          = c_cat_commit_costs
+*        i_opex_grp          = c_opex_commit_costs
+*        i_capex_grp         = c_capex_commit_costs
+*      CHANGING
+*        ct_cost_object_data = ct_cost_object_data.
+
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~GET_COST_OBJECT_DATA
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [<-->] ET_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD if_ex_rpm_fico_intf~get_cost_object_data.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~GET_MULTIPLE_OBJECT_LINKS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_SYSTEM                      TYPE        LOGSYS
+* | [<-->] CT_OBJLINK                     TYPE        RPM_TT_R3FI_OBJLINK
+* | [<-->] CT_OBJLINK_OR                  TYPE        RPM_TT_R3FI_OBJLINK
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~GET_MULTIPLE_OBJECT_LINKS.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~GET_OBJECT_ATTRIBUTES
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_OBJTYPE                     TYPE        RPM_TV_FIF_OBJTYPE
+* | [--->] IV_OBJID1                      TYPE        RPM_TV_FIF_OBJID1
+* | [--->] IV_OBJID2                      TYPE        RPM_TV_FIF_OBJID2
+* | [<-->] EV_OBJNR                       TYPE        CHAR22
+* | [<-->] EV_OBJCURR                     TYPE        WAERS
+* | [<-->] EV_KOKRS                       TYPE        KOKRS
+* | [<-->] EV_RETURN_CODE                 TYPE        I
+* | [<-->] EV_EXECUTED                    TYPE        I(optional)
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~GET_OBJECT_ATTRIBUTES.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~MODIFY_EXCHANGE_RATE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_CURRENCY_FROM               TYPE        WAERS
+* | [--->] IV_CURRENCY_TO                 TYPE        WAERS
+* | [--->] IS_OBJ                         TYPE        RPM_TS_FICO_COLL(optional)
+* | [<-->] EV_DATE                        TYPE        SY-DATUM
+* | [<-->] EV_DATE_TYPE                   TYPE        BAPI1093_2-DATE_TYPE(optional)
+* | [<-->] EV_RATE_TYPE                   TYPE        BAPI1093_0-RATE_TYPE(optional)
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~MODIFY_EXCHANGE_RATE.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~MODIFY_SETTLEMENT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_PSPID                       TYPE        PS_PSPID(optional)
+* | [--->] IV_AUFNR                       TYPE        AUFNR(optional)
+* | [--->] IV_RSPOBART                    TYPE        RSPIOBJSV
+* | [--->] IV_RSPAROBVAL                  TYPE        RSPIOVALUE
+* | [<-->] EV_CONSIDER                    TYPE        RPM_TV_FLAG
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~MODIFY_SETTLEMENT.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->MAP_COVP
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_COVP                        TYPE        COVP
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [<---] ET_CODATA                      TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD map_covp.
+    DATA: lo_get_fi_data TYPE REF TO cl_rpm_get_fico_data,
+          lt_codata      TYPE TABLE OF rpm_ts_fico_coll,
+          ls_codata      TYPE rpm_ts_fico_coll,
+          lv_wrttp       TYPE v_coss_view-wrttp.
+
+    CREATE OBJECT lo_get_fi_data.
+*PROJID
+    ls_codata-projid = is_task_objlink-projid.
+*taskid
+    ls_codata-taskid = is_task_objlink-taskid.
+*objlink
+    ls_codata-objlink = is_task_objlink-objlink.
+*version
+    ls_codata-version = is_covp-versn.
+*fiscal year
+    ls_codata-fiscyear = is_covp-gjahr.
+* orgid
+    READ TABLE i_prps INTO DATA(ls_prps) WITH KEY objnr = is_task_objlink-objnr
+    TRANSPORTING pkokr.
+    lv_wrttp = |{ is_covp-wrttp ALPHA = IN WIDTH = 2 }|.
+    SELECT zzvalco, zzvappm, qmart, estat, inversion_flag, versn, flag, flag_covp
+       FROM zppm001
+       WHERE zzvalco = @lv_wrttp
+       INTO @DATA(ls_mapping)
+      UP TO 1 ROWS
+      .
+    ENDSELECT.
+    IF sy-subrc <> 0.
+      RETURN.
+    ELSE.
+      ls_codata-valtype = ls_mapping-zzvappm.        " ← target field
+    ENDIF.
+    ls_codata-orgid = ls_prps-pkokr.
+
+*COSTCAT
+    IF is_covp IS NOT INITIAL.
+      ls_codata-costcat = is_covp-kstar.
+    ENDIF.
+*pertype
+    ls_codata-pertype = 'M'.
+
+
+    CALL METHOD me->fill_period_data_covp
+      EXPORTING
+        is_covp         = is_covp
+        is_task_objlink = is_task_objlink
+        is_codata       = ls_codata
+      IMPORTING
+        ct_codata       = et_codata.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PPM_RPM_FICO_INT->SUBMIT_CJI3
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] I_PRPS                         TYPE        TT_PRPS
+* | [--->] IV_PR                          TYPE        FLAG(optional)
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD submit_cji3.
+
+    DATA: lv_text      TYPE c LENGTH 10,
+          ls_tab       TYPE covp,
+          lt_selscreen TYPE TABLE OF rsparams.
+    DATA: lv_start_date TYPE bkpf-budat,
+          lv_psphi      TYPE ps_pspid,
+          lv_end_date   TYPE bkpf-budat
+          .
+    FIELD-SYMBOLS  : <ft_data>   TYPE ANY TABLE .
+
+    DATA: rt_projn TYPE RANGE OF ps_pspid.
+    DATA: rt_budat TYPE RANGE OF proj-aedte.
+    DATA lr_pay_data              TYPE REF TO data.
+
+    cl_salv_bs_runtime_info=>set(    EXPORTING display  = abap_false
+                                               metadata = abap_true
+                                               data     = abap_true ).
+    LOOP AT i_prps INTO DATA(ls_prps).
+      CALL FUNCTION 'CONVERSION_EXIT_ABPSN_INPUT'
+        EXPORTING
+          input  = ls_prps-posid
+        IMPORTING
+          output = lv_psphi.
+      APPEND VALUE #( sign = 'I'  option = 'EQ' low = lv_psphi ) TO rt_projn.
+    ENDLOOP.
+
+
+    CALL FUNCTION 'LAST_DAY_OF_MONTHS'
+      EXPORTING
+        day_in            = sy-datum
+      IMPORTING
+        last_day_of_month = lv_end_date
+      EXCEPTIONS
+        day_in_no_date    = 1
+        OTHERS            = 2.
+    CLEAR lv_start_date.
+    APPEND VALUE #( sign = 'I'  option = 'BT' high = lv_end_date low = lv_start_date ) TO rt_budat.
+
+
+    SET PARAMETER ID 'CAC' FIELD c_kokrs_4000."KOKRS."'BCCA'.
+    SET PARAMETER ID 'PDB' FIELD '000000000001'.
+
+    SUBMIT rkpep003 WITH SELECTION-TABLE lt_selscreen
+    WITH cn_profd EQ '000000000001'
+    WITH cn_projn IN rt_projn
+    WITH r_budat IN rt_budat
+    WITH p_maxsel EQ c_max_100000
+    AND RETURN .
+
+    TRY.
+        cl_salv_bs_runtime_info=>get_data_ref( IMPORTING r_data = lr_pay_data ).
+        ASSIGN lr_pay_data->* TO <ft_data>.
+      CATCH cx_salv_bs_sc_runtime_info.
+
+    ENDTRY.
+
+    cl_salv_bs_runtime_info=>clear_all( ).
+    IF <ft_data> IS ASSIGNED.
+      LOOP AT <ft_data> ASSIGNING FIELD-SYMBOL(<fs_data>) .
+
+        ASSIGN COMPONENT 'OBART' OF STRUCTURE <fs_data> TO FIELD-SYMBOL(<fs_value>).
+        IF <fs_value> IS ASSIGNED .
+          IF iv_pr IS NOT INITIAL AND <fs_value> <> 'PR' .
+            UNASSIGN <fs_value>.
+            CONTINUE.
+          ENDIF.
+          IF iv_pr IS INITIAL AND <fs_value> = 'PR'.
+            UNASSIGN <fs_value>.
+            CONTINUE.
+          ENDIF.
+          UNASSIGN <fs_value>.
+        ENDIF.
+
+        MOVE-CORRESPONDING <fs_data> TO ls_tab.
+        APPEND ls_tab TO i_covp.
+        CLEAR ls_tab.
+      ENDLOOP.
+
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->FETCH_COSS_DATA
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICWBSCST                    TYPE        RPM_TT_ICWBSCST
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD fetch_coss_data.
+*----------------------------------------------------------------*
+* 1. Declare type & internal table
+*----------------------------------------------------------------*
+    TYPES: BEGIN OF ty_base,
+             objnr_prps TYPE prps-objnr,
+             qmnum      TYPE qmnum,
+             psp_nr     TYPE ps_psp_pnr,
+             objnr      TYPE j_objnr,
+             qmart      TYPE qmart,
+             qmdab      TYPE qmdab,
+           END OF ty_base,
+           tt_base TYPE STANDARD TABLE OF ty_base.
+
+    TYPES: BEGIN OF ty_status,
+             objnr TYPE j_objnr,
+             stsma TYPE j_stsma,
+             estat TYPE j_estat,
+             txt04 TYPE j_txt04,
+             txt30 TYPE j_txt30,
+           END OF ty_status,
+           tt_status TYPE STANDARD TABLE OF ty_status.
+    TYPES: BEGIN OF ty_parob_link,
+             parob TYPE v_coss_view-parob,        " 'QM' + 12 chars QMNUM
+             qmnum TYPE qmnum,
+           END OF ty_parob_link.
+*   type for Network Activity -> WBS mapping
+    TYPES: BEGIN OF ty_nwa,
+             act_objnr TYPE j_objnr,       " 'NV' + AUFPL + APLZL (network activity objnr)
+             wbs_objnr TYPE j_objnr,       " parent WBS objnr ('PR' ...) for roll-up
+           END OF ty_nwa.
+
+    DATA: lt_parob_link        TYPE SORTED TABLE OF ty_parob_link
+                        WITH UNIQUE KEY parob,
+          ls_parob_link        TYPE ty_parob_link,
+          lt_base              TYPE tt_base,
+          lt_status            TYPE tt_status,
+          ls_status            TYPE ty_status,
+          ls_data              LIKE LINE OF i_data_coss,
+          gcl_screen           TYPE REF TO /noveco/evm_screen,
+          gcl_project          TYPE REF TO /noveco/evm_project,
+          lt_var_costs_current TYPE  /noveco/var_cost_alv_ttyp,
+          lv_psphi             TYPE ps_psphi,
+          ls_message           TYPE /rpm/ts_t100_message,
+          lo_get_fi_data       TYPE REF TO cl_rpm_get_fico_data,
+          lt_codata            TYPE TABLE OF rpm_ts_fico_coll,
+          ls_codata            TYPE rpm_ts_fico_coll,
+          lr_qmart             TYPE RANGE OF qmart,
+          lr_wrttp             TYPE RANGE OF v_coss_view-wrttp,
+          lv_inv_flag          TYPE zppm001-inversion_flag,
+          lt_nwa               TYPE SORTED TABLE OF ty_nwa
+                                 WITH NON-UNIQUE KEY act_objnr,
+          lr_objnr_p3          TYPE RANGE OF j_objnr,
+          lv_objnr_prps        TYPE j_objnr,
+          lv_qmnum             TYPE qmnum,
+          lv_pspnr             TYPE proj-pspnr,
+          lv_wrttp             TYPE v_coss_view-wrttp.
+    FIELD-SYMBOLS:<lf_prtid> TYPE any,
+                  <lf_msg>   TYPE STANDARD TABLE,
+                  <fs_base>  TYPE ty_base.
+
+    IF i_data_coss IS INITIAL OR projid NE is_task_objlink-projid.
+
+* check if portfolio Item External ID is in sync with project Coding mask
+      CALL FUNCTION 'CJPN_EDITMASK_GET'
+        EXPORTING
+          pspid_imp = is_task_objlink-objid2
+        EXCEPTIONS
+          not_found = 1
+          OTHERS    = 2.
+      IF sy-subrc = 0.
+        CALL FUNCTION 'CONVERSION_EXIT_KONPD_INPUT'
+          EXPORTING
+            input     = is_task_objlink-objid2
+          IMPORTING
+            output    = lv_psphi
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        IF sy-subrc <> 0.
+* Implement suitable error handling here
+        ENDIF.
+      ENDIF.
+      " Append using VALUE operator
+      lr_qmart = VALUE #( BASE lr_qmart
+          ( sign = 'I' option = 'EQ' low = 'Z1' high = '' )
+          ( sign = 'I' option = 'EQ' low = 'Z2' high = '' )
+          ( sign = 'I' option = 'EQ' low = 'Z4' high = '' )
+          ( sign = 'I' option = 'EQ' low = 'R1' high = '' )
+          ( sign = 'I' option = 'EQ' low = 'R2' high = '' )
+          ).
+* get all objnr from PRPS for Project.
+      SELECT WBSElement,WBSElementObject,ProjectInternalID,WBSElementShortID, CompanyCode,
+        ControllingArea, WBSElementHierarchyLevel,Currency,FreeDefinedIndicator2 FROM i_wbselement
+        INTO TABLE @i_prps
+        WHERE ProjectInternalID = @lv_psphi.
+*----------------------------------------------------------------*
+*  Get Network Activities assigned to this project's WBS
+*     AFVC = network activity (operation), AFVC-PROJN = assigned WBS (PSPNR)
+*     Join PRPS to translate PSPNR -> WBS objnr (for roll-up target)
+*----------------------------------------------------------------*
+      SELECT a~objnr AS act_objnr,
+             p~WBSElementObject AS wbs_objnr
+        FROM afvc AS a
+        INNER JOIN i_wbselement AS p ON p~WBSElementInternalID = a~projn
+        WHERE p~ProjectInternalID = @lv_psphi
+          AND a~projn <> 0                  " only activities assigned to a WBS
+        INTO TABLE @lt_nwa.
+*----------------------------------------------------------------*
+* 2. SELECT 1 — PROJ → PRPS → VIQMEL
+*----------------------------------------------------------------*
+      SELECT w~WBSElementObject,
+             q~qmnum,
+             q~psp_nr,
+             q~objnr,
+             q~qmart,
+             q~qmdab
+        FROM i_wbselement AS w
+        INNER JOIN viqmel AS q ON q~psp_nr = w~WBSElementInternalID
+        WHERE w~ProjectInternalID = @lv_psphi
+        AND q~qmart IN @lr_qmart
+        INTO TABLE @lt_base .
+
+      IF lt_base IS INITIAL.
+        RETURN.
+      ENDIF.
+
+*----------------------------------------------------------------*
+* 3. SELECT 2 — JSTO + JEST + TJ30T via FOR ALL ENTRIES
+*----------------------------------------------------------------*
+      DATA(lt_base_temp) = lt_base.
+      SORT lt_base_temp BY objnr ASCENDING.
+      DELETE ADJACENT DUPLICATES FROM lt_base_temp COMPARING objnr.
+      IF lt_base_temp IS NOT INITIAL.
+        SELECT s~objnr, s~stsma, j~stat
+          FROM jsto AS s
+          INNER JOIN jest AS j ON j~objnr = s~objnr AND j~inact = @space
+          FOR ALL ENTRIES IN @lt_base_temp
+          WHERE s~objnr = @lt_base_temp-objnr
+          INTO TABLE @DATA(lt_status_raw).
+        SORT lt_status_raw BY objnr stsma stat.
+        DELETE ADJACENT DUPLICATES FROM lt_status_raw COMPARING objnr stsma stat.
+        IF lt_status_raw IS NOT INITIAL.
+          SELECT stsma, estat, txt04, txt30
+            FROM tj30t
+            FOR ALL ENTRIES IN @lt_status_raw
+            WHERE stsma = @lt_status_raw-stsma
+              AND estat = @lt_status_raw-stat
+              AND spras = 'E'
+            INTO TABLE @DATA(lt_tj30t).
+        ENDIF.
+        SORT lt_tj30t BY stsma ASCENDING
+                         estat ASCENDING.
+        LOOP AT lt_status_raw INTO DATA(ls_raw).
+          CLEAR ls_status.
+          ls_status-objnr = ls_raw-objnr.
+          ls_status-stsma = ls_raw-stsma.
+          ls_status-estat = ls_raw-stat.
+          READ TABLE lt_tj30t INTO DATA(ls_tj30t)
+               WITH KEY stsma = ls_raw-stsma estat = ls_raw-stat.
+          IF sy-subrc = 0.
+            ls_status-txt04 = ls_tj30t-txt04.
+            ls_status-txt30 = ls_tj30t-txt30.
+          ENDIF.
+          APPEND ls_status TO lt_status.
+        ENDLOOP.
+      ENDIF.
+
+*----------------------------------------------------------------*
+* 4. Get COSS data
+*----------------------------------------------------------------*
+      SELECT zzvalco, zzvappm, qmart, estat, inversion_flag, versn, flag, flag_covp
+        FROM zppm001
+        WHERE zzvalco IS NOT INITIAL
+        INTO TABLE @DATA(lt_mapping).
+      LOOP AT lt_mapping ASSIGNING FIELD-SYMBOL(<fs_mapping>).
+        lv_wrttp = |{ <fs_mapping>-zzvalco ALPHA = IN WIDTH = 2 }|.
+        <fs_mapping>-zzvalco = lv_wrttp.
+        APPEND VALUE #( sign = 'I'  option = 'EQ' low = lv_wrttp ) TO lr_wrttp.
+        CLEAR lv_wrttp.
+      ENDLOOP.
+      LOOP AT lt_base ASSIGNING <fs_base>.
+        CLEAR ls_parob_link.
+        CONCATENATE 'QM' <fs_base>-qmnum INTO ls_parob_link-parob.
+        ls_parob_link-qmnum = <fs_base>-qmnum.
+        INSERT ls_parob_link INTO TABLE lt_parob_link.   " SORTED + UNIQUE = auto dedup
+      ENDLOOP.
+
+      IF lt_parob_link IS NOT INITIAL.
+        SELECT objnr, parob, gjahr, wrttp, versn, kstar, hrkft, vrgng, beknz, twaer, wog001, wog002, wog003, wog004, wog005, wog006, wog007, wog008, wog009, wog010, wog011, wog012, wog013, wog014, wog015, wog016, wtg001, wtg002, wtg003, wtg004,
+          " controlling area currency
+          wtg005, wtg006, wtg007, wtg008, wtg009, wtg010, wtg011, wtg012, wtg013, wtg014, wtg015, wtg016
+          FROM v_coss_view
+          FOR ALL ENTRIES IN @lt_parob_link
+          WHERE parob = @lt_parob_link-parob
+          AND wrttp IN @lr_wrttp
+          INTO TABLE @DATA(lt_coss).
+      ENDIF.
+
+*----------------------------------------------------------------*
+*  Fetch P3 (CTC) for BOTH WBS and Network Activity objnrs
+*     - WBS  objnr  : CTC entered directly on the WBS element
+*     - NWA  objnr  : CTC on the network activity (prefix 'NV'),
+*                     which rolls up to the parent WBS
+*----------------------------------------------------------------*
+      CLEAR lr_objnr_p3.
+*     WBS objnrs (prefix 'PR')
+      LOOP AT i_prps ASSIGNING FIELD-SYMBOL(<ls_prps_p3>).
+        APPEND VALUE #( sign = 'I' option = 'EQ'
+                        low = <ls_prps_p3>-objnr ) TO lr_objnr_p3.
+      ENDLOOP.
+*     Network activity objnrs (prefix 'NV')
+      LOOP AT lt_nwa ASSIGNING FIELD-SYMBOL(<ls_nwa_p3>).
+        APPEND VALUE #( sign = 'I' option = 'EQ'
+                        low = <ls_nwa_p3>-act_objnr ) TO lr_objnr_p3.
+      ENDLOOP.
+
+      IF lr_objnr_p3 IS NOT INITIAL.
+        SELECT objnr, parob, gjahr, wrttp, versn, kstar, hrkft, vrgng, beknz, twaer, wog001, wog002, wog003, wog004, wog005, wog006, wog007, wog008, wog009, wog010, wog011, wog012, wog013, wog014, wog015, wog016, wtg001, wtg002, wtg003, wtg004,
+          " controlling area currency
+          wtg005, wtg006, wtg007, wtg008, wtg009, wtg010, wtg011, wtg012, wtg013, wtg014, wtg015, wtg016
+          FROM v_coss_view
+          WHERE objnr IN @lr_objnr_p3
+            AND wrttp = @c_wrttp_p3
+*          AND gjahr = @lv_gjahr "
+*          AND versn = 'NF0' " forecast version
+          INTO TABLE @DATA(lt_coss_p3).
+      ENDIF.
+*   <<< CHANGED
+*----------------------------------------------------------------*
+* >>> ADDED: Fetch P3 (CTC) from COSP (primary cost elements)
+*     Materials and external costs are stored in COSP, not COSS
+*----------------------------------------------------------------*
+      IF lr_objnr_p3 IS NOT INITIAL.
+        SELECT objnr, gjahr, wrttp, versn, kstar, hrkft, vrgng, beknz, twaer,
+               wkg001, wkg002, wkg003, wkg004, wkg005, wkg006,
+               wkg007, wkg008, wkg009, wkg010, wkg011, wkg012,
+               wtg001, wtg002, wtg003, wtg004, wtg005, wtg006,
+               wtg007, wtg008, wtg009, wtg010, wtg011, wtg012
+          FROM v_cosp_view
+          WHERE objnr IN @lr_objnr_p3
+            AND wrttp = @c_wrttp_p3
+          INTO TABLE @DATA(lt_cosp_p3).
+      ENDIF.
+
+
+*----------------------------------------------------------------*
+* 5. Combine LOOP + APPEND
+*----------------------------------------------------------------*
+      lv_pspnr = is_task_objlink-projid.
+      CREATE OBJECT gcl_project
+        EXPORTING
+          pspnr = lv_pspnr.
+      SORT lt_status BY estat ASCENDING.
+      DELETE lt_status WHERE estat IS INITIAL.
+
+      " Build sorted lookup for lt_base
+      DATA: lt_base_sorted TYPE SORTED TABLE OF ty_base
+                           WITH NON-UNIQUE KEY qmnum.
+      lt_base_sorted = lt_base.
+
+      LOOP AT lt_coss ASSIGNING FIELD-SYMBOL(<ls_coss>).
+
+        " --- Filter: only handle cost with partner = notification ---
+        IF <ls_coss>-parob(2) <> 'QM'.
+          CONTINUE.
+        ENDIF.
+        lv_qmnum = <ls_coss>-parob+2(12) .
+
+        " --- Lookup lt_base theo QMNUM ---
+        READ TABLE lt_base_sorted ASSIGNING FIELD-SYMBOL(<ls_base>)
+             WITH KEY qmnum = lv_qmnum
+             BINARY SEARCH.
+        IF sy-subrc <> 0.
+          CONTINUE.
+        ENDIF.
+
+        " --- Loop status (1 QMEL with multiple status active) ---
+        LOOP AT lt_status ASSIGNING FIELD-SYMBOL(<ls_status>)
+             USING KEY primary_key
+             WHERE objnr = <ls_base>-objnr.
+
+          " --- Unpivot 12 period into 12 row ---
+          DO 12 TIMES.
+            DATA(lv_period) = sy-index.
+            DATA(lv_fld) = |WOG{ lv_period  WIDTH = 3 ALIGN = RIGHT PAD = '0' }|.
+            " Dynamic access WOG001..WOG012 và WTG001..WTG012
+            ASSIGN COMPONENT lv_fld
+                   OF STRUCTURE <ls_coss> TO FIELD-SYMBOL(<lv_wog>).
+            ASSIGN COMPONENT |WTG{ lv_period WIDTH = 3 ALIGN = RIGHT  PAD = '0' }|
+                   OF STRUCTURE <ls_coss> TO FIELD-SYMBOL(<lv_wtg>).
+
+            " Skip period without amount value
+            IF <lv_wog> = 0 AND <lv_wtg> = 0.
+              CONTINUE.
+            ENDIF.
+
+            CLEAR ls_data.
+
+            " --- QMEL base ---
+            ls_data-objnr_prps = <ls_base>-objnr_prps.
+            ls_data-psp_nr     = <ls_base>-psp_nr.
+            ls_data-qmnum      = <ls_base>-qmnum.
+            ls_data-qmart      = <ls_base>-qmart.
+            ls_data-objnr      = <ls_base>-objnr.
+            ls_data-qmdab      = <ls_base>-qmdab.
+
+            " --- Status ---
+            ls_data-estat = <ls_status>-estat.
+            ls_data-txt04 = <ls_status>-txt04.
+            ls_data-txt30 = <ls_status>-txt30.
+
+            " --- COSS dimensions ---
+            ls_data-gjahr = <ls_coss>-gjahr.
+            ls_data-perio = lv_period.
+            ls_data-wrttp = <ls_coss>-wrttp.
+            ls_data-kstar = <ls_coss>-kstar.
+            ls_data-versn = <ls_coss>-versn.
+            ls_data-twaer = <ls_coss>-twaer.
+
+            " --- Amounts ---
+            ls_data-wog = <lv_wog>.       " CC currency
+            ls_data-wtg = <lv_wtg>.       " Transaction currency
+
+            APPEND ls_data TO i_data_coss.
+
+          ENDDO.
+
+        ENDLOOP.
+
+      ENDLOOP.
+
+*----------------------------------------------------------------*
+* 5b. P3 (CTC) flow — WBS + Network Activity, rolled up to WBS
+*----------------------------------------------------------------*
+      LOOP AT lt_coss_p3 ASSIGNING <ls_coss>.
+
+*       determine the roll-up WBS objnr
+        lv_objnr_prps = <ls_coss>-objnr.          " default: objnr is already a WBS
+        IF <ls_coss>-objnr(2) = 'NV'.
+          " Network activity -> find parent WBS for roll-up
+          READ TABLE lt_nwa INTO DATA(ls_nwa)
+               WITH KEY act_objnr = <ls_coss>-objnr.
+          IF sy-subrc = 0.
+            lv_objnr_prps = ls_nwa-wbs_objnr.     " roll up to WBS
+          ELSE.
+            CONTINUE.   " activity not assigned to a WBS in scope -> skip
+          ENDIF.
+        ENDIF.
+
+        " --- Unpivot 12 period into 12 row ---
+        DO 12 TIMES.
+          lv_period = sy-index.
+          lv_fld = |WOG{ lv_period  WIDTH = 3 ALIGN = RIGHT PAD = '0' }|.
+          " Dynamic access WOG001..WOG012 và WTG001..WTG012
+          ASSIGN COMPONENT lv_fld
+                 OF STRUCTURE <ls_coss> TO <lv_wog>.
+          ASSIGN COMPONENT |WTG{ lv_period WIDTH = 3 ALIGN = RIGHT  PAD = '0' }|
+                 OF STRUCTURE <ls_coss> TO <lv_wtg>.
+
+          " Skip period without amount value
+          IF <lv_wog> = 0 AND <lv_wtg> = 0.
+            CONTINUE.
+          ENDIF.
+
+          CLEAR ls_data.
+
+*         use rolled-up WBS objnr so network activity costs
+*             aggregate to the WBS in the final mapping loop
+          ls_data-objnr_prps = lv_objnr_prps.
+          ls_data-objnr      = lv_objnr_prps.
+
+          " --- COSS dimensions ---
+          ls_data-gjahr = <ls_coss>-gjahr.
+          ls_data-perio = lv_period.
+          ls_data-wrttp = <ls_coss>-wrttp.
+          ls_data-kstar = <ls_coss>-kstar.
+          ls_data-versn = <ls_coss>-versn.
+          ls_data-twaer = <ls_coss>-twaer.
+
+          " --- Amounts ---
+          ls_data-wog = <lv_wog>.       " CC currency
+          ls_data-wtg = <lv_wtg>.       " Transaction currency
+
+          APPEND ls_data TO i_data_coss.
+        ENDDO.
+      ENDLOOP.
+
+      " >>> ADDED: Loop COSP P3 (use WKG)
+      LOOP AT lt_cosp_p3 ASSIGNING FIELD-SYMBOL(<ls_cosp>).
+        " map NV → WBS giống COSS
+        lv_objnr_prps = <ls_cosp>-objnr.
+        IF <ls_cosp>-objnr(2) = 'NV'.
+          READ TABLE lt_nwa INTO ls_nwa WITH KEY act_objnr = <ls_cosp>-objnr.
+          IF sy-subrc = 0.
+            lv_objnr_prps = ls_nwa-wbs_objnr.
+          ELSE.
+            CONTINUE.
+          ENDIF.
+        ENDIF.
+
+        DO 12 TIMES.
+          lv_period = sy-index.
+          " COSP dùng WKG (không phải WOG)
+          ASSIGN COMPONENT |WKG{ lv_period WIDTH = 3 ALIGN = RIGHT PAD = '0' }|
+                 OF STRUCTURE <ls_cosp> TO <lv_wog>.
+
+          ASSIGN COMPONENT |WTG{ lv_period WIDTH = 3 ALIGN = RIGHT PAD = '0' }|
+                 OF STRUCTURE <ls_cosp> TO <lv_wtg>.
+
+          IF <lv_wog> = 0 AND <lv_wtg> = 0.
+            CONTINUE.
+          ENDIF.
+
+          CLEAR ls_data.
+          ls_data-objnr_prps = lv_objnr_prps.
+          ls_data-objnr      = lv_objnr_prps.
+          ls_data-gjahr = <ls_cosp>-gjahr.
+          ls_data-perio = lv_period.
+          ls_data-wrttp = <ls_cosp>-wrttp.
+          ls_data-kstar = <ls_cosp>-kstar.
+          ls_data-versn = <ls_cosp>-versn.
+          ls_data-twaer = <ls_cosp>-twaer.
+          ls_data-wog = <lv_wog>.
+          ls_data-wtg = <lv_wtg>.
+          APPEND ls_data TO i_data_coss.
+        ENDDO.
+      ENDLOOP.
+
+    ENDIF.
+
+    IF i_data_coss IS NOT INITIAL.
+      IF lt_mapping IS INITIAL.
+        SELECT zzvalco, zzvappm, qmart, estat, inversion_flag, versn, flag, flag_covp
+           FROM zppm001
+           WHERE zzvalco IS NOT INITIAL
+           INTO TABLE @lt_mapping
+          .
+        LOOP AT lt_mapping ASSIGNING <fs_mapping>.
+          lv_wrttp = |{ <fs_mapping>-zzvalco ALPHA = IN WIDTH = 2 }|.
+          <fs_mapping>-zzvalco = lv_wrttp.
+          CLEAR lv_wrttp.
+        ENDLOOP.
+      ENDIF.
+*Add the extries to CT_COST_OBJECT_DATA for the present WBS.(we have ainformation for all WBSEs in i_COSP)
+      LOOP AT i_data_coss INTO ls_data WHERE objnr_prps = is_task_objlink-objnr.
+        READ TABLE i_prps INTO DATA(ls_prps) WITH KEY objnr = is_task_objlink-objnr.
+        CLEAR lv_inv_flag.
+        IF  ls_data-wog < 0.
+          lv_inv_flag = 'X'.
+        ENDIF.
+
+*PROJID
+        ls_codata-projid = is_task_objlink-projid.
+*taskid
+        ls_codata-taskid = is_task_objlink-taskid.
+*objlink
+        ls_codata-objlink = is_task_objlink-objlink.
+
+*fiscal year
+        ls_codata-fiscyear = ls_data-gjahr.
+* orgid
+        ls_codata-orgid = ls_prps-pkokr.
+*COSTCAT
+        ls_codata-costcat = ls_data-kstar.
+*pertype
+        ls_codata-pertype = 'M'.
+
+* PERID
+        ls_codata-perid = ls_data-perio.
+        IF fiscyear_var IS INITIAL.
+          SELECT SINGLE FiscalYearVariant FROM i_companycode INTO @fiscyear_var WHERE CompanyCode = @ls_prps-pbukr.
+        ENDIF.
+*        ls_codata-strtdate = ls_data-qmdab+0(6) && '01'.
+        CALL FUNCTION 'G_POSTING_DATE_OF_PERIOD_GET'
+          EXPORTING
+            period              = ls_codata-perid
+            variant             = fiscyear_var
+            year                = ls_codata-fiscyear
+          IMPORTING
+            from_date           = ls_codata-strtdate
+            to_date             = ls_codata-enddate
+          EXCEPTIONS
+            period_not_defined  = 1
+            variant_not_defined = 2
+            OTHERS              = 3.
+
+* controlling area currency.
+
+        ls_codata-currency = ls_data-twaer.
+
+*OBJCURR
+
+        ls_codata-objcurr = ls_data-owaer.
+        IF ls_codata-objcurr IS INITIAL.
+          ls_codata-objcurr = ls_codata-currency.
+        ENDIF.
+*orgtype
+        ls_codata-orgtype = 'COA'.
+*Application
+        ls_codata-application = 'SAPCO'.
+*objtype
+        ls_codata-objtype = is_task_objlink-objnr(2).
+*objid1
+        ls_codata-objid1  = is_task_objlink-objid1.
+*objid2
+        ls_codata-objid2  = is_task_objlink-objid2.
+*LOGSYS
+        IF logsys IS INITIAL.
+          SELECT SINGLE logsys INTO ls_codata-logsys FROM t000 WHERE mandt = sy-mandt.
+          logsys = ls_codata-logsys.
+        ELSE.
+          ls_codata-logsys = logsys.
+        ENDIF.
+*PHASE
+        ls_codata-phase = 0.
+*PS_OBJ_CURR
+        ls_codata-ps_obj_curr = is_task_objlink-objcurr.
+
+*EXCHRATEDAT
+        ls_codata-exchratedat =  ls_codata-strtdate.
+*amount
+        ls_codata-amount = ls_data-wtg.
+*objamnt
+        ls_codata-objamt = ls_data-wog.
+
+
+        LOOP AT lt_mapping INTO DATA(ls_mapping)
+       WHERE zzvalco        = ls_data-wrttp
+        AND   qmart          = ls_data-qmart
+        AND   estat          = ls_data-txt04
+        AND   inversion_flag = lv_inv_flag
+        AND   versn          = ls_data-versn
+            .
+          IF ls_mapping-inversion_flag IS NOT INITIAL.
+            ls_codata-amount = ls_codata-amount * ( -1 ).
+            ls_codata-objamt = ls_codata-objamt * ( -1 ).
+          ENDIF.
+**version
+          ls_codata-version = ls_mapping-versn.
+          ls_codata-valtype = ls_mapping-zzvappm.        " ← target field
+          APPEND ls_codata TO lt_codata .
+
+        ENDLOOP.
+        IF sy-subrc <> 0.
+* added on July 2nd 2026 - In case it can find any configuration mapping (negative)
+          LOOP AT lt_mapping INTO ls_mapping
+         WHERE zzvalco        = ls_data-wrttp
+          AND   qmart          = ls_data-qmart
+          AND   estat          = ls_data-txt04
+*          AND   inversion_flag = lv_inv_flag
+          AND   versn          = ls_data-versn
+              .
+            IF ls_mapping-inversion_flag IS NOT INITIAL.
+              ls_codata-amount = ls_codata-amount * ( -1 ).
+              ls_codata-objamt = ls_codata-objamt * ( -1 ).
+            ENDIF.
+**version
+            ls_codata-version = ls_mapping-versn.
+            ls_codata-valtype = ls_mapping-zzvappm.        " ← target field
+            APPEND ls_codata TO lt_codata .
+
+          ENDLOOP.
+        ENDIF.
+        IF sy-subrc <> 0.
+          CONTINUE.
+        ENDIF.
+        LOOP AT lt_codata INTO ls_codata.
+          READ TABLE ct_cost_object_data ASSIGNING FIELD-SYMBOL(<fs_codata>) WITH KEY
+                                                  projid = ls_codata-projid
+                                                  taskid = ls_codata-taskid
+                                                  linktype = ls_codata-linktype
+                                                  objlink = ls_codata-objlink
+                                                  version = ls_codata-version
+                                                  fiscyear = ls_codata-fiscyear
+                                                  valtype = ls_codata-valtype
+                                                  costcat = ls_codata-costcat
+                                                  pertype = ls_codata-pertype
+                                                  perid = ls_codata-perid
+                                                  costcen = ls_codata-costcen
+                                                  acttype = ls_codata-acttype .
+          IF sy-subrc = 0.
+            <fs_codata>-amount = <fs_codata>-amount + ls_codata-amount.
+            <fs_codata>-objamt = <fs_codata>-objamt + ls_codata-objamt.
+            UNASSIGN <fs_codata>.
+          ELSE.
+            APPEND ls_codata TO ct_cost_object_data.
+          ENDIF.
+          CLEAR ls_codata.
+
+        ENDLOOP.
+        CLEAR ls_codata.
+        REFRESH lt_codata.
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~CONVERT_WBS_PLANCOST_ACDOCP
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_ACDOCP_DATA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~CONVERT_WBS_PLANCOST_ACDOCP.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_RPM_FICO_INT->IF_EX_RPM_FICO_INTF~MODIFY_EXCHANGE_RATE_ACDOCP
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_CURRENCY_FROM               TYPE        WAERS
+* | [--->] IV_CURRENCY_TO                 TYPE        WAERS
+* | [--->] IS_OBJ                         TYPE        RPM_TS_ACDOCP_DATA(optional)
+* | [<-->] EV_DATE                        TYPE        SY-DATUM
+* | [<-->] EV_DATE_TYPE                   TYPE        BAPI1093_2-DATE_TYPE(optional)
+* | [<-->] EV_RATE_TYPE                   TYPE        BAPI1093_0-RATE_TYPE(optional)
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method IF_EX_RPM_FICO_INTF~MODIFY_EXCHANGE_RATE_ACDOCP.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PPM_RPM_FICO_INT->FETCH_CJI3
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_TASK_OBJLINK                TYPE        RPM_R3FI_OBJLINK
+* | [--->] IT_ICWBSCST                    TYPE        RPM_TT_ICWBSCST
+* | [<-->] CT_COST_OBJECT_DATA            TYPE        RPM_TT_FICO_COLL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD fetch_cji3.
+    DATA: lv_psphi       TYPE ps_psphi,
+          ls_message     TYPE /rpm/ts_t100_message,
+          lt_cosp        TYPE STANDARD TABLE OF v_cosp_view,
+          lt_coss        TYPE STANDARD TABLE OF v_cosp_view,
+          ls_cosp        TYPE v_cosp_view,
+          ls_covp        TYPE covp,
+          lo_get_fi_data TYPE REF TO cl_rpm_get_fico_data,
+          lt_codata      TYPE TABLE OF rpm_ts_fico_coll,
+          ls_codata      TYPE rpm_ts_fico_coll.
+    FIELD-SYMBOLS:<lf_prtid> TYPE any,
+                  <lf_msg>   TYPE STANDARD TABLE.
+
+* COSP needs only to be filled once as we fetch all entries in COSP for our Project.
+    REFRESH lt_cosp.
+    IF i_covp IS INITIAL OR projid NE is_task_objlink-projid.
+
+* check if portfolio Item External ID is in sync with project Coding mask
+      CALL FUNCTION 'CJPN_EDITMASK_GET'
+        EXPORTING
+          pspid_imp = is_task_objlink-objid2
+        EXCEPTIONS
+          not_found = 1
+          OTHERS    = 2.
+      IF sy-subrc = 0.
+        CALL FUNCTION 'CONVERSION_EXIT_KONPD_INPUT'
+          EXPORTING
+            input     = is_task_objlink-objid2
+          IMPORTING
+            output    = lv_psphi
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        IF sy-subrc <> 0.
+* Implement suitable error handling here
+        ENDIF.
+
+      ENDIF.
+* get all objnr from PRPS for Project.
+      SELECT WBSElement,WBSElementObject,ProjectInternalID,WBSElementShortID, CompanyCode,
+        ControllingArea, WBSElementHierarchyLevel,Currency,FreeDefinedIndicator2 FROM i_wbselement
+        INTO TABLE @i_prps
+        WHERE ProjectInternalID = @lv_psphi.
+      IF sy-subrc IS INITIAL.
+
+        CALL METHOD me->submit_cji3
+          EXPORTING
+            iv_pr  = 'X'
+            i_prps = i_prps.
+        DELETE i_covp WHERE kstar IS INITIAL.
+
+      ENDIF.
+      projid = is_task_objlink-projid.
+      DELETE i_covp WHERE wrttp <> c_bank_prj_stock_valt.
+
+    ENDIF.
+
+    IF i_covp IS NOT INITIAL.
+
+*Add the extries to CT_COST_OBJECT_DATA for the present WBS.(we have ainformation for all WBSEs in i_COSP)
+      LOOP AT i_covp INTO DATA(ls_data) WHERE objnr = is_task_objlink-objnr.
+        MOVE-CORRESPONDING ls_data TO ls_cosp.
+
+        CALL METHOD me->map_covp
+          EXPORTING
+            is_covp         = ls_data
+            is_task_objlink = is_task_objlink
+          IMPORTING
+            et_codata       = lt_codata.
+
+        LOOP AT lt_codata INTO ls_codata.
+          READ TABLE ct_cost_object_data ASSIGNING FIELD-SYMBOL(<fs_codata>) WITH KEY
+                                                  projid = ls_codata-projid
+                                                  taskid = ls_codata-taskid
+                                                  linktype = ls_codata-linktype
+                                                  objlink = ls_codata-objlink
+                                                  version = ls_codata-version
+                                                  fiscyear = ls_codata-fiscyear
+                                                  valtype = ls_codata-valtype
+                                                  costcat = ls_codata-costcat
+                                                  pertype = ls_codata-pertype
+                                                  perid = ls_codata-perid
+                                                  costcen = ls_codata-costcen
+                                                  acttype = ls_codata-acttype .
+          IF sy-subrc = 0.
+            <fs_codata>-amount = <fs_codata>-amount + ls_codata-amount.
+            <fs_codata>-objamt = <fs_codata>-objamt + ls_codata-objamt.
+            UNASSIGN <fs_codata>.
+          ELSE.
+            APPEND ls_codata TO ct_cost_object_data.
+          ENDIF.
+          CLEAR ls_codata.
+
+        ENDLOOP.
+        CLEAR ls_codata.
+        CLEAR ls_cosp.
+        REFRESH lt_codata.
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDMETHOD.
+ENDCLASS.
