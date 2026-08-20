@@ -2230,10 +2230,11 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
 *    IF iv_lastlevelapproval IS INITIAL.
 
     DATA(lt_all_steps) = lt_variation_steps. "INITIATOR
-    DELETE lt_all_steps WHERE workflowaction NE 'INITIATOR'.
+    DELETE lt_all_steps WHERE workflowaction EQ 'INITIATOR'.
     IF lt_all_steps IS NOT INITIAL.
       SORT lt_all_steps BY counter DESCENDING.
-      DATA(lv_count_itemnumber) = VALUE #( lt_all_steps[ 1 ]-counter OPTIONAL ).
+      "DATA(lv_count_itemnumber) = VALUE #( lt_all_steps[ 1 ]-counter OPTIONAL ).
+     DATA(lv_count_itemnumber) = lines( lt_all_steps ).
     ENDIF.
     IF lv_current_itnumber = lv_total_steps.
       DATA(lv_lastlevelapproval) = abap_true.
@@ -2242,8 +2243,8 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
     ENDIF.
 
     IF lv_count_itemnumber IS NOT INITIAL.
-      DATA(lv_cnt_lastitm) = lv_current_itnumber - lv_count_itemnumber.
-      IF lv_cnt_lastitm = lv_total_steps.
+      "DATA(lv_cnt_lastitm) = lv_current_itnumber - lv_count_itemnumber.
+      IF lv_count_itemnumber = lv_total_steps.
         lv_lastlevelapproval = abap_true.
       ELSE.
         lv_lastlevelapproval = abap_false.
