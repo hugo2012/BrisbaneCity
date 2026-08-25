@@ -1,0 +1,992 @@
+class ZCL_EP_UI_CHECKLIST definition
+  public
+  final
+  create public .
+
+public section.
+
+  interfaces IF_BADI_INTERFACE .
+  interfaces /RPM/IF_EX_ITEM_API .
+protected section.
+private section.
+ENDCLASS.
+
+
+
+CLASS ZCL_EP_UI_CHECKLIST IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~DECISION_UI_CONFIG_MODIFY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_DECISIONS                   TYPE        /RPM/TT_DECISION_API
+* | [--->] IV_EDIT_MODE                   TYPE        /RPM/TV_EDIT_MODE(optional)
+* | [--->] IS_MODE                        TYPE        /RPM/TS_CHANGE_MODE(optional)
+* | [<-->] CT_FIELD_DESCRIPTION           TYPE        /RPM/TT_FIELDS_DESCRIPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD /rpm/if_ex_item_api~decision_ui_config_modify.
+*---------------------------------------------------------------------*
+* BCC - Brisbane City Counci
+*----------------------------------------------------------------------*
+* Description: WBS User status update Enhancement
+* Reason:  CALM ID/Description : ENH - 084 - 3-9368 - Need to expose
+*Project Checklist Functionality to PPM Item decision point
+*           or item initiatives
+*         ( ) ChangeRequest : ...
+*         (X) WorkItem   :
+*         ( ) Project   : ...
+*         ( ) Other     : ..
+*
+* Ordered by:
+*------------------------- Documentation of changes--------------------*
+* Version SAP-Rel    Date      Developer
+*   Description
+*----------------------------------------------------------------------*
+* >000<   7.50   10.10.2025       TCS / Soniya Kumari(116789)
+* Expose Project Checklist Functionality to PPM Item decision point
+*----------------------------------------------------------------------*
+    DATA: var      TYPE fieldname,
+          i        TYPE i,
+          lw_const TYPE zty_const_struc,
+          t_const  TYPE STANDARD TABLE OF zty_const_struc.
+
+    FIELD-SYMBOLS : <fs_field> TYPE /rpm/ts_fields_description.
+
+**//Fetch the constant table based on the report id
+    CALL METHOD zcl_utilities=>check_and_select
+      EXPORTING
+        i_name  = sy-repid
+      CHANGING
+        t_const = t_const.
+    IF sy-subrc IS INITIAL.
+      SORT t_const.
+    ENDIF.
+    "//Read the decision table to identify the phase
+    DATA(lw_dec) = it_decisions[ 1 ].
+    IF sy-subrc IS INITIAL.
+    ENDIF.
+    "//Read the item type
+*    SELECT SINGLE item_type FROM /rpm/item_d INTO @DATA(lw_itemdet) WHERE guid = @lw_dec-item_guid.
+    SELECT SINGLE item_type FROM zi_rpm_item_d INTO @DATA(lw_itemdet) WHERE guid = @lw_dec-item_guid.
+    IF sy-subrc IS INITIAL.
+    ENDIF.
+    "//Retrieve the feild name based on BRF+ constant
+    TRY.
+        lw_const = t_const[ zde_key1 = lw_itemdet zde_key2 = lw_dec-decision_id ].
+        IF lw_const IS NOT INITIAL.
+        ENDIF.
+      CATCH cx_sy_itab_line_not_found INTO DATA(lx_not_found).
+    ENDTRY.
+
+    IF lw_const-zde_value1 IS NOT INITIAL.
+*//Activate only the field maintained in the BRF+ for the phase
+      READ TABLE ct_field_description ASSIGNING <fs_field> WITH KEY fieldname = lw_const-zde_value1.
+      IF sy-subrc IS INITIAL.
+        <fs_field>-visible = abap_true.
+        <fs_field>-enabled = abap_true.
+      ENDIF.
+    ENDIF.
+
+    IF lw_const-zde_value2 IS NOT INITIAL.
+*//Activate only the field maintained in the BRF+ for the phase
+      READ TABLE ct_field_description ASSIGNING <fs_field> WITH KEY fieldname = lw_const-zde_value2.
+      IF sy-subrc IS INITIAL.
+        <fs_field>-visible = abap_true.
+        <fs_field>-enabled = abap_true.
+      ENDIF.
+    ENDIF.
+
+
+    IF lw_const-zde_value3 IS NOT INITIAL.
+*//Activate only the field maintained in the BRF+ for the phase
+      READ TABLE ct_field_description ASSIGNING <fs_field> WITH KEY fieldname = lw_const-zde_value3.
+      IF sy-subrc IS INITIAL.
+        <fs_field>-visible = abap_true.
+        <fs_field>-enabled = abap_true.
+      ENDIF.
+    ENDIF.
+
+    IF lw_const-zde_value4 IS NOT INITIAL.
+*//Activate only the field maintained in the BRF+ for the phase
+      READ TABLE ct_field_description ASSIGNING <fs_field> WITH KEY fieldname = lw_const-zde_value4.
+      IF sy-subrc IS INITIAL.
+        <fs_field>-visible = abap_true.
+        <fs_field>-enabled = abap_true.
+      ENDIF.
+    ENDIF.
+    FREE:lw_const,t_const,lw_dec.
+
+*---------------------------------------------------------------------------------------------
+
+    "----------------------------------------------------------------------
+    " Create PPM Item Snapshot when a Decision row in IT_DECISIONS
+    " has STATUS ZDP06 (Approved) / ZDP04 (On Hold) / ZDP05 (Declined).
+    " - Uses decision STATUS from IT_DECISIONS (not /RPM/ITEM_D)
+    " - Maps Segment-2 from DECISION_ID, fallback by text
+    " - Builds Version ID/Name; upper-cases Name before FM call
+    " - Prevents duplicates via /RPM/IT_VER_CTRL
+    " - Memory-ID reentry guard uses CHAR-like ID (not STRING)
+    " - FM /RPM/ITEMS_VERS_CREATE called with *only* mandatory params + ID/Name
+    "----------------------------------------------------------------------
+
+    "---- Decision UI data -------------------------------------------------
+    DATA: lv_item_guid   TYPE /rpm/item_d-guid,   " RAW16 (GUID)
+          lv_decision_id TYPE string,
+          lv_phase_text  TYPE string,
+          lv_dec_status  TYPE string,            " decision STATUS (ZDP06/04/05)
+          lv_seg2        TYPE c LENGTH 2,
+          lv_seg3        TYPE c LENGTH 4.
+
+    "---- Version ID/Name build -------------------------------------------
+    DATA: lv_date_c(10),
+          lv_time_c(5),
+          lv_ts            TYPE string,
+          lv_ver_info_id   TYPE string,            " header name (ID)
+          lv_ver_info_name TYPE string,            " display name (Name)
+          lv_guide         TYPE rpm_tv_guid,
+          lv_guide_itm     TYPE rpm_tv_guid.
+    FIELD-SYMBOLS: <ls_dec> TYPE any,
+                   <fv>     TYPE any.
+
+*  CLEAR ev_rc.
+
+    "----------------------------------------------------------------------
+    " 1) Extract: GUID / DECISION_ID / NAME|PHASE_TEXT / STATUS from IT_DECISIONS
+    "    Prefer ACTIVE='X' row; fallback to first row.
+    "----------------------------------------------------------------------
+    CLEAR: lv_item_guid, lv_decision_id, lv_phase_text, lv_dec_status,lv_guide,lv_guide_itm.
+
+    LOOP AT it_decisions ASSIGNING <ls_dec>.
+      ASSIGN COMPONENT 'ACTIVE' OF STRUCTURE <ls_dec> TO <fv>.
+      IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> = 'X'.
+        ASSIGN COMPONENT 'ITEM_GUID' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+          lv_item_guid = <fv>.
+        ELSE.
+          ASSIGN COMPONENT 'GUID' OF STRUCTURE <ls_dec> TO <fv>.
+          IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+            lv_item_guid = <fv>.
+          ENDIF.
+        ENDIF.
+
+        ASSIGN COMPONENT 'DECISION_ID' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+          lv_decision_id = <fv>.
+        ENDIF.
+
+        ASSIGN COMPONENT 'PHASE_TEXT' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+          lv_phase_text = <fv>.
+        ELSE.
+          ASSIGN COMPONENT 'NAME' OF STRUCTURE <ls_dec> TO <fv>.
+          IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+            lv_phase_text = <fv>.
+          ENDIF.
+        ENDIF.
+        "----------------------------------------------------------------------
+        ASSIGN COMPONENT 'GUID' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+          lv_guide = <fv>.
+        ENDIF.
+        ASSIGN COMPONENT 'ITEM_GUID' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+          lv_guide_itm = <fv>.
+        ENDIF.
+        "----------------------------------------------------------------------
+
+        ASSIGN COMPONENT 'STATUS' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+          lv_dec_status = <fv>.
+        ENDIF.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+
+    IF lv_item_guid IS INITIAL OR lv_decision_id IS INITIAL OR lv_dec_status IS INITIAL.
+      READ TABLE it_decisions ASSIGNING <ls_dec> INDEX 1.
+      IF sy-subrc = 0.
+        ASSIGN COMPONENT 'ITEM_GUID' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+          lv_item_guid = <fv>.
+        ELSE.
+          ASSIGN COMPONENT 'GUID' OF STRUCTURE <ls_dec> TO <fv>.
+          IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+            lv_item_guid = <fv>.
+          ENDIF.
+        ENDIF.
+        ASSIGN COMPONENT 'DECISION_ID' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+          lv_decision_id = <fv>.
+        ENDIF.
+        ASSIGN COMPONENT 'PHASE_TEXT' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+          lv_phase_text = <fv>.
+        ELSE.
+          ASSIGN COMPONENT 'NAME' OF STRUCTURE <ls_dec> TO <fv>.
+          IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+            lv_phase_text = <fv>.
+          ENDIF.
+        ENDIF.
+        ASSIGN COMPONENT 'STATUS' OF STRUCTURE <ls_dec> TO <fv>.
+        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+          lv_dec_status = <fv>.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lv_item_guid IS INITIAL OR lv_decision_id IS INITIAL OR lv_dec_status IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    "  decision STATUS Existing Check
+    "----------------------------------------------------------------------
+    DATA : lv_old_status TYPE /rpm/tv_status_common.
+    CLEAR: lv_old_status.
+    SELECT SINGLE status
+      FROM /rpm/decision
+     WHERE ( guid = @lv_guide
+      AND decision_id = @lv_decision_id )
+      OR ( decision_id = @lv_decision_id
+       AND item_guid = @lv_guide_itm )
+      INTO @lv_old_status.
+
+*    --------------------------------------------------------------------
+*     No status change = no version creation
+*    --------------------------------------------------------------------
+
+    IF lv_old_status = lv_dec_status.
+      RETURN.
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 2) Segment‑3 from decision STATUS
+    "----------------------------------------------------------------------
+    CLEAR lv_seg3.
+    CASE lv_dec_status.
+      WHEN 'ZDP04'. lv_seg3 = 'HOLD'.
+      WHEN 'ZDP05'. lv_seg3 = 'DECL'.
+      WHEN 'ZDP06'. lv_seg3 = 'APRV'.
+      WHEN OTHERS.  RETURN.
+    ENDCASE.
+
+    "----------------------------------------------------------------------
+    " 3) Segment‑2 from DECISION_ID; fallback by phase text
+    "----------------------------------------------------------------------
+    CLEAR lv_seg2.
+    CASE lv_decision_id.
+      WHEN 'Z_DP_10'. lv_seg2 = 'DI'.
+      WHEN 'Z_DP_20'. lv_seg2 = 'PF'.
+      WHEN 'Z_DP_30'. lv_seg2 = 'FE'.
+      WHEN 'Z_DP_40'. lv_seg2 = 'EX'.
+      WHEN 'Z_DP_50'. lv_seg2 = 'CL'.
+      WHEN 'Z_DP_60'. lv_seg2 = 'CM'.
+    ENDCASE.
+
+    IF lv_seg2 IS INITIAL AND lv_phase_text IS NOT INITIAL.
+      DATA lv_phase_up TYPE string.
+      lv_phase_up = lv_phase_text.
+      TRANSLATE lv_phase_up TO UPPER CASE.
+      IF lv_phase_up CS 'IDEATION'.
+        lv_seg2 = 'DI'.
+      ELSEIF lv_phase_up CS 'PRE-FEASIBILITY'.
+        lv_seg2 = 'PF'.
+      ELSEIF lv_phase_up CS 'FEASIBILITY'.
+        lv_seg2 = 'FE'.
+      ELSEIF lv_phase_up CS 'EXECUTION'.
+        lv_seg2 = 'EX'.
+      ELSEIF lv_phase_up CS 'CLOSURE'.
+        lv_seg2 = 'CL'.
+      ELSEIF lv_phase_up CS 'COMPLETION'.
+        lv_seg2 = 'CM'.
+      ENDIF.
+    ENDIF.
+
+    IF lv_seg2 IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 4) Build Version Info ID & Name (upper-case Name)
+    "     ID:   DP-<Seg2>-<Seg3>-YYYY.MM.DD_HH:MM
+    "     Name: Snapshot <PHASE_TEXT> Approved   (upper-cased)
+    "----------------------------------------------------------------------
+    CONCATENATE sy-datum+0(4) '.' sy-datum+4(2) '.' sy-datum+6(2) INTO lv_date_c.
+    CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2) INTO lv_time_c.
+    CONCATENATE lv_date_c '_' lv_time_c            INTO lv_ts.
+
+    CONCATENATE 'DP-' lv_seg2 '-' lv_seg3 '-' lv_ts INTO lv_ver_info_id.
+
+    IF lv_phase_text IS INITIAL.
+      lv_phase_text = lv_decision_id.
+    ENDIF.
+
+    CONCATENATE 'Snapshot ' lv_phase_text ' Approved' INTO lv_ver_info_name.
+    TRANSLATE lv_ver_info_name TO UPPER CASE.  " upper-case the Name
+
+    "----------------------------------------------------------------------
+    " 5) Re-entry guard (CHAR-like memory ID; STRING not allowed)
+    "----------------------------------------------------------------------
+    DATA: lv_memid TYPE c LENGTH 64,   " << fix: char-like, not string
+          ls_mem   TYPE string.
+
+    lv_memid = |Z_RPM_SNAP_{ lv_item_guid }|.
+    IMPORT ls_mem = ls_mem FROM MEMORY ID lv_memid.
+    IF ls_mem = lv_ver_info_id.
+      RETURN. " already processed in this LUW
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 6) Duplicate prevention via /RPM/IT_VER_CTRL (no /RPM/S_ITEM_VERSION)
+    "----------------------------------------------------------------------
+    DATA lv_exists TYPE abap_bool VALUE abap_false.
+
+    SELECT SINGLE name
+      FROM /rpm/it_ver_ctrl
+      WHERE guid = @lv_item_guid
+        AND name = @lv_ver_info_name
+      INTO @DATA(lv_dummy_vers_hdr).
+    IF sy-subrc = 0.
+      lv_exists = abap_true.
+    ENDIF.
+
+    IF lv_exists = abap_true.
+      ls_mem = lv_ver_info_id.
+      EXPORT ls_mem = ls_mem TO MEMORY ID lv_memid.
+      RETURN.
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 7) Build IT_ITEM_GUIDS (Unicode-safe: row type is /RPM/TS_GUID with field GUID)
+    "    and call FM with only mandatory params + ID/Name
+    "----------------------------------------------------------------------
+    DATA: lt_item_guids   TYPE /rpm/tt_guid,
+          ls_item_guid    TYPE /rpm/ts_guid,
+          lv_version_type TYPE inm_tv_version_type,   " use your domain code (e.g., '01')
+          lv_hdr_name     TYPE /rpm/tv_version_name,  " header name (ID)
+          lv_cp_name      TYPE /rpm/tv_version_name,  " display name (upper-cased)
+          lv_ev_rc        TYPE i,
+          lt_messages     TYPE /rpm/tt_messages.
+
+    CLEAR: lt_item_guids, ls_item_guid, lv_version_type, lv_hdr_name, lv_cp_name,
+           lv_ev_rc, lt_messages.
+
+    ls_item_guid-guid = lv_item_guid.
+    APPEND ls_item_guid TO lt_item_guids.
+
+    " IMPORTANT: set to your IMG value (typically '01')
+    lv_version_type = '01'.
+
+    lv_hdr_name = lv_ver_info_id.
+    lv_cp_name  = lv_ver_info_name.
+
+    CALL FUNCTION '/RPM/ITEMS_VERS_CREATE'
+      EXPORTING
+        it_item_guids      = lt_item_guids
+        iv_version_type    = lv_version_type
+        iv_vers_hdr_name   = lv_hdr_name
+        iv_cp_version_name = lv_cp_name
+        iv_log_messages    = abap_true
+      IMPORTING
+        ev_rc              = lv_ev_rc
+        et_messages        = lt_messages.
+
+    " Mark as processed this LUW to avoid re-entry
+    ls_mem = lv_ver_info_id.
+    EXPORT ls_mem = ls_mem TO MEMORY ID lv_memid.
+
+    IF lv_ev_rc IS NOT INITIAL.
+      " Optional: map lt_messages to your UI messages if desired
+      RETURN.
+    ENDIF.
+
+
+
+
+**Begin of changes for the RICEF 9331 by 116599
+*    "----------------------------------------------------------------------
+*    " Create PPM Item Snapshot when Decision Point status is ZDP06/ZDP04/ZDP05
+*    " BAdI Method: DECISION_UI_CONFIG_MODIFY (triggered by Fiori tile flow)
+*    " Tables/fields used (as per your system):
+*    "   /RPM/ITEM_D   : GUID (RAW16), STATUS
+*    "   /RPM/PHASE_T  : LANGU, ITEM_TYPE, PHASE_ID, PHASE_TEXT
+*    "   T002          : LAISO -> SPRAS (only if you want to map 2-char → 1-char)
+*    "----------------------------------------------------------------------
+*
+*    "---- Local Data -------------------------------------------------------
+*    DATA: lv_item_guid     TYPE /rpm/tv_guid, "/rpm/item_d-guid,   " RAW16 (GUID)
+*          lv_decision_id   TYPE string,
+*          lv_phase_text    TYPE string,
+*          lv_dec_status    TYPE string,            " decision's STATUS (e.g., ZDP06)
+*          lv_seg2          TYPE c LENGTH 2,
+*          lv_seg3          TYPE c LENGTH 4,
+*          lv_date_c(10),
+*          lv_time_c(5),
+*          lv_ts            TYPE string,
+*          lv_ver_info_id   TYPE string,
+*          lv_ver_info_name TYPE string.
+*
+*    FIELD-SYMBOLS: <ls_dec> TYPE any,
+*                   <fv>     TYPE any.
+*
+*    "----------------------------------------------------------------------
+*    " 1) Extract from IT_DECISIONS: ITEM_GUID / GUID, DECISION_ID, NAME, STATUS
+*    "    Prefer ACTIVE='X' row; fallback to first row.
+*    "    Your screenshots show fields: ITEM_GUID (or GUID), NAME, DECISION_ID, STATUS, ACTIVE
+*    "----------------------------------------------------------------------
+*    CLEAR: lv_item_guid, lv_decision_id, lv_phase_text, lv_dec_status.
+*
+*    "Pass 1: ACTIVE row
+*    LOOP AT it_decisions ASSIGNING <ls_dec>.
+*      ASSIGN COMPONENT 'ACTIVE' OF STRUCTURE <ls_dec> TO <fv>.
+*      IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> = 'X'.
+*
+*        " GUID
+*        ASSIGN COMPONENT 'ITEM_GUID' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+*          lv_item_guid = <fv>.
+*        ELSE.
+*          ASSIGN COMPONENT 'GUID' OF STRUCTURE <ls_dec> TO <fv>.
+*          IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+*            lv_item_guid = <fv>.
+*          ENDIF.
+*        ENDIF.
+*
+*        " DECISION_ID
+*        ASSIGN COMPONENT 'DECISION_ID' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+*          lv_decision_id = <fv>.
+*        ENDIF.
+*
+*        " PHASE TEXT (often in NAME)
+*        ASSIGN COMPONENT 'PHASE_TEXT' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+*          lv_phase_text = <fv>.
+*        ELSE.
+*          ASSIGN COMPONENT 'NAME' OF STRUCTURE <ls_dec> TO <fv>.
+*          IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+*            lv_phase_text = <fv>.
+*          ENDIF.
+*        ENDIF.
+*
+*        " STATUS from decision row (THIS is your trigger)
+*        ASSIGN COMPONENT 'STATUS' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+*          lv_dec_status = <fv>.
+*        ENDIF.
+*
+*        EXIT.
+*      ENDIF.
+*    ENDLOOP.
+*
+*    "Pass 2: fallback to first row if ACTIVE row not found
+*    IF lv_item_guid IS INITIAL OR lv_decision_id IS INITIAL OR lv_dec_status IS INITIAL.
+*      READ TABLE it_decisions ASSIGNING <ls_dec> INDEX 1.
+*      IF sy-subrc = 0.
+*        ASSIGN COMPONENT 'ITEM_GUID' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+*          lv_item_guid = <fv>.
+*        ELSE.
+*          ASSIGN COMPONENT 'GUID' OF STRUCTURE <ls_dec> TO <fv>.
+*          IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+*            lv_item_guid = <fv>.
+*          ENDIF.
+*        ENDIF.
+*
+*        ASSIGN COMPONENT 'DECISION_ID' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+*          lv_decision_id = <fv>.
+*        ENDIF.
+*
+*        ASSIGN COMPONENT 'PHASE_TEXT' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED AND <fv> IS NOT INITIAL.
+*          lv_phase_text = <fv>.
+*        ELSE.
+*          ASSIGN COMPONENT 'NAME' OF STRUCTURE <ls_dec> TO <fv>.
+*          IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+*            lv_phase_text = <fv>.
+*          ENDIF.
+*        ENDIF.
+*
+*        ASSIGN COMPONENT 'STATUS' OF STRUCTURE <ls_dec> TO <fv>.
+*        IF sy-subrc = 0 AND <fv> IS ASSIGNED.
+*          lv_dec_status = <fv>.
+*        ENDIF.
+*      ENDIF.
+*    ENDIF.
+*
+*    IF lv_item_guid IS INITIAL OR lv_decision_id IS INITIAL OR lv_dec_status IS INITIAL.
+*      RETURN.  " insufficient context to proceed
+*    ENDIF.
+*
+*    "----------------------------------------------------------------------
+*    " 2) Segment‑3 from the **decision row STATUS**
+*    "----------------------------------------------------------------------
+*    CLEAR lv_seg3.
+*    CASE lv_dec_status.
+*      WHEN 'ZDP04'. lv_seg3 = 'HOLD'.  " On Hold
+*      WHEN 'ZDP05'. lv_seg3 = 'DECL'.  " Declined
+*      WHEN 'ZDP06'. lv_seg3 = 'APRV'.  " Approved
+*      WHEN OTHERS.
+*        RETURN. " Not a trigger status; skip
+*    ENDCASE.
+*
+*    "----------------------------------------------------------------------
+*    " 3) Segment‑2 from DECISION_ID (preferred) or by NAME text (fallback)
+*    "    Mapping per your table:
+*    "      Z_DP_10->DI, Z_DP_20->PF, Z_DP_30->FE, Z_DP_40->EX, Z_DP_50->CL, Z_DP_60->CM
+*    "----------------------------------------------------------------------
+*    CLEAR lv_seg2.
+*    CASE lv_decision_id.
+*      WHEN 'Z_DP_10'. lv_seg2 = 'DI'.
+*      WHEN 'Z_DP_20'. lv_seg2 = 'PF'.
+*      WHEN 'Z_DP_30'. lv_seg2 = 'FE'.
+*      WHEN 'Z_DP_40'. lv_seg2 = 'EX'.
+*      WHEN 'Z_DP_50'. lv_seg2 = 'CL'.
+*      WHEN 'Z_DP_60'. lv_seg2 = 'CM'.
+*    ENDCASE.
+*
+*    IF lv_seg2 IS INITIAL AND lv_phase_text IS NOT INITIAL.
+*      DATA lv_phase_up TYPE string.
+*      lv_phase_up = lv_phase_text.
+*      TRANSLATE lv_phase_up TO UPPER CASE.
+*
+*      IF lv_phase_up CS 'IDEATION'.
+*        lv_seg2 = 'DI'.
+*      ELSEIF lv_phase_up CS 'PRE-FEASIBILITY'.
+*        lv_seg2 = 'PF'.
+*      ELSEIF lv_phase_up CS 'FEASIBILITY'.
+*        lv_seg2 = 'FE'.
+*      ELSEIF lv_phase_up CS 'EXECUTION'.
+*        lv_seg2 = 'EX'.
+*      ELSEIF lv_phase_up CS 'CLOSURE'.
+*        lv_seg2 = 'CL'.
+*      ELSEIF lv_phase_up CS 'COMPLETION'.
+*        lv_seg2 = 'CM'.
+*      ENDIF.
+*    ENDIF.
+*
+*    IF lv_seg2 IS INITIAL.
+*      RETURN. " cannot map the phase → skip
+*    ENDIF.
+*
+*    "----------------------------------------------------------------------
+*    " 4) Build Version Info ID & Name
+*    "     ID:  DP-<Seg2>-<Seg3>-YYYY.MM.DD_HH:MM
+*    "     Name: Snapshot <PHASE_TEXT> Approved  (per your spec)
+*    "----------------------------------------------------------------------
+*    CLEAR: lv_date_c, lv_time_c, lv_ts, lv_ver_info_id, lv_ver_info_name.
+*
+*    CONCATENATE sy-datum+0(4) '.' sy-datum+4(2) '.' sy-datum+6(2) INTO lv_date_c.
+*    CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2) INTO lv_time_c.
+*    CONCATENATE lv_date_c '_' lv_time_c INTO lv_ts.
+*
+*    CONCATENATE 'DP-' lv_seg2 '-' lv_seg3 '-' lv_ts INTO lv_ver_info_id.
+*
+*    IF lv_phase_text IS INITIAL.
+*      lv_phase_text = lv_decision_id.  " safety fallback for naming
+*    ENDIF.
+*    CONCATENATE 'Snapshot ' lv_phase_text ' Approved' INTO lv_ver_info_name.
+*    TRANSLATE lv_ver_info_name TO UPPER CASE.
+*    " If you want the **actual** status in the name use:
+*    "* DATA lv_status_txt TYPE string.
+*    "* IF lv_seg3 = 'APRV'.
+*    "*   lv_status_txt = 'Approved'.
+*    "* ELSEIF lv_seg3 = 'HOLD'.
+*    "*   lv_status_txt = 'On Hold'.
+*    "* ELSEIF lv_seg3 = 'DECL'.
+*    "*   lv_status_txt = 'Declined'.
+*    "* ENDIF.
+*    "* CONCATENATE 'Snapshot ' lv_phase_text ' ' lv_status_txt INTO lv_ver_info_name.
+*
+*    "----------------------------------------------------------------------
+*    " 5) Create the snapshot (no COMMIT WORK here; framework owns LUW)
+*    "----------------------------------------------------------------------
+*
+**    TYPES: BEGIN OF ty_item_guid,
+**             guid TYPE /rpm/tv_guid,
+**           END OF ty_item_guid.
+*    DATA: lt_item_guid    TYPE /rpm/tt_guid,
+*          ls_item_guid    TYPE /rpm/ts_guid,
+*          lv_guid         TYPE /rpm/tv_guid,
+*          lv_version_guid TYPE crmt_object_guid,
+*          lv_ev_rc        TYPE i,
+*          lt_messages     TYPE /rpm/tt_messages.
+*
+*    CONSTANTS: lv_version_type TYPE inm_tv_version_type VALUE '01'.
+*    CLEAR: lt_item_guid, ls_item_guid.
+*    " Table of item GUIDs
+*
+*
+*
+*    ls_item_guid-guid = lv_item_guid.
+*    APPEND ls_item_guid TO lt_item_guid.
+*
+*    CALL FUNCTION '/RPM/ITEMS_VERS_CREATE'
+*      EXPORTING
+*        it_item_guids    = lt_item_guid
+*        iv_version_type  = lv_version_type
+*        iv_vers_hdr_name = lv_ver_info_name
+**       iv_cp_version_name = lv_ver_info_id
+**       iv_vers_hdr_description =
+**       iv_versioned_parent     =
+**       iv_laiso         =
+**       iv_log_messages  = abap_false
+*      IMPORTING
+*       ev_rc            = lv_ev_rc
+*       et_messages      = lt_messages
+*      .
+**End of changes for the RICEF 9331 by 116599
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~ITEM_ACTION
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_ATTRIBUTES                  TYPE        /RPM/TT_ITEM_D_API
+* | [--->] IV_LANGUAGE                    TYPE        LAISO(optional)
+* | [--->] IV_CHANGE_MODE                 TYPE        CHAR1
+* | [<-->] EV_RC                          TYPE        I
+* | [<-->] ET_MSG                         TYPE        /RPM/TT_MESSAGES
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method /RPM/IF_EX_ITEM_API~ITEM_ACTION.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~ALTER_ITEM_LIST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_SCOPE                       TYPE        /RPM/TV_DASHBOARD_SCOPE
+* | [--->] IV_DASHBOARD_TYPE              TYPE        I
+* | [--->] IV_MY_OBJECTS                  TYPE        BOOLE_D
+* | [<-->] CT_API_ATTRIBUTES              TYPE        /RPM/TT_ITEM_D_API
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method /RPM/IF_EX_ITEM_API~ALTER_ITEM_LIST.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~DECISION_ACTION
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_CONTEXT                     TYPE        /RPM/TS_OBJECT_HIER
+* | [--->] IT_DECISION_ATTR               TYPE        /RPM/TT_DECISION_API
+* | [--->] IV_LANGUAGE                    TYPE        LAISO
+* | [--->] IV_CHANGE_MODE                 TYPE        CHAR1
+* | [<-->] EV_RC                          TYPE        I
+* | [<-->] ET_MSG                         TYPE        /RPM/TT_MESSAGES
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD /rpm/if_ex_item_api~decision_action.     "  Method Implementation by 116599
+
+    "----------------------------------------------------------------------
+    " Auto-create a PPM Item Snapshot when DP status is ZDP06/ZDP04/ZDP05
+    " Uses fields verified in your system:
+    "   IS_CONTEXT ( /RPM/TS_OBJECT_HIER ) : OBJECT_GUID
+    "   /RPM/ITEM_D                        : GUID, STATUS
+    "   /RPM/PHASE_T                       : LANGU, ITEM_TYPE, PHASE_ID, PHASE_TEXT
+    "   T002                               : LAISO -> SPRAS
+    "----------------------------------------------------------------------
+
+    "---- Local data (strict typing to your tables) -----------------------
+    DATA: lv_item_guid     TYPE /rpm/item_d-guid,         " RAW16
+          lv_item_status   TYPE /rpm/item_d-status,       " CHAR
+          lv_phase_text    TYPE string,
+          lv_phase_id      TYPE /rpm/phase_t-phase_id,
+          lv_item_type     TYPE /rpm/phase_t-item_type,
+          lv_spras         TYPE spras,
+          lv_date_c(10),
+          lv_time_c(5),
+          lv_ts            TYPE string,
+          lv_ver_info_id   TYPE string,
+          lv_ver_info_name TYPE string,
+          lv_seg2          TYPE c LENGTH 2,
+          lv_seg3          TYPE c LENGTH 4,
+          lt_item_guids    TYPE /rpm/tt_guid,
+          ls_item_guid     TYPE /rpm/ts_guid,
+          lv_version_type  TYPE inm_tv_version_type,
+          lv_hdr_name      TYPE /rpm/tv_version_name,  " header name (ID)
+          lv_cp_name       TYPE /rpm/tv_version_name.  " display name (upper-cased)
+
+    FIELD-SYMBOLS: <ls_dec> TYPE any,
+                   <fs_val> TYPE any.
+
+    CLEAR ev_rc.
+
+    "----------------------------------------------------------------------
+    " 1) Item GUID from IS_CONTEXT exactly as per structure: OBJECT_GUID
+    "----------------------------------------------------------------------
+    lv_item_guid = is_context-object_guid.
+    IF lv_item_guid IS INITIAL.
+      RETURN.  " cannot proceed without item
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 2) Read Item STATUS from /RPM/ITEM_D using GUID
+    "----------------------------------------------------------------------
+    CLEAR lv_item_status.
+*    SELECT SINGLE status
+*      FROM /rpm/item_d
+*      INTO lv_item_status
+*     WHERE guid = lv_item_guid.
+    SELECT SINGLE status
+      FROM zi_rpm_item_d
+      INTO @lv_item_status
+     WHERE guid = @lv_item_guid.
+    IF sy-subrc <> 0 OR lv_item_status IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    CASE lv_item_status.
+      WHEN 'ZDP04'. lv_seg3 = 'HOLD'.  " On Hold
+      WHEN 'ZDP05'. lv_seg3 = 'DECL'.  " Declined
+      WHEN 'ZDP06'. lv_seg3 = 'APRV'.  " Approved
+      WHEN OTHERS.
+        RETURN. " Not a trigger status
+    ENDCASE.
+
+    "----------------------------------------------------------------------
+    " 3) Get PHASE_ID / PHASE_TEXT / ITEM_TYPE from IT_DECISION_ATTR
+    "    Prefer ACTIVE = 'X' row; if not present, take first row.
+    "    These component names exist in /RPM/TS_DECISION_ATTR in your system.
+    "----------------------------------------------------------------------
+    CLEAR: lv_phase_text, lv_phase_id, lv_item_type.
+
+    LOOP AT it_decision_attr ASSIGNING <ls_dec>.
+      ASSIGN COMPONENT 'ACTIVE' OF STRUCTURE <ls_dec> TO <fs_val>.
+      IF sy-subrc = 0 AND <fs_val> IS ASSIGNED AND <fs_val> = 'X'.
+
+        ASSIGN COMPONENT 'PHASE_ID' OF STRUCTURE <ls_dec> TO <fs_val>.
+        IF sy-subrc = 0 AND <fs_val> IS ASSIGNED.
+          lv_phase_id = <fs_val>.
+        ENDIF.
+
+        ASSIGN COMPONENT 'PHASE_TEXT' OF STRUCTURE <ls_dec> TO <fs_val>.
+        IF sy-subrc = 0 AND <fs_val> IS ASSIGNED.
+          lv_phase_text = <fs_val>.
+        ENDIF.
+
+        ASSIGN COMPONENT 'ITEM_TYPE' OF STRUCTURE <ls_dec> TO <fs_val>.
+        IF sy-subrc = 0 AND <fs_val> IS ASSIGNED.
+          lv_item_type = <fs_val>.
+        ENDIF.
+
+        EXIT. " active row handled
+      ENDIF.
+    ENDLOOP.
+
+    IF lv_phase_id IS INITIAL AND lv_phase_text IS INITIAL.
+      READ TABLE it_decision_attr ASSIGNING <ls_dec> INDEX 1.
+      IF sy-subrc = 0.
+        ASSIGN COMPONENT 'PHASE_ID' OF STRUCTURE <ls_dec> TO <fs_val>.
+        IF sy-subrc = 0 AND <fs_val> IS ASSIGNED.
+          lv_phase_id = <fs_val>.
+        ENDIF.
+        ASSIGN COMPONENT 'PHASE_TEXT' OF STRUCTURE <ls_dec> TO <fs_val>.
+        IF sy-subrc = 0 AND <fs_val> IS ASSIGNED.
+          lv_phase_text = <fs_val>.
+        ENDIF.
+        ASSIGN COMPONENT 'ITEM_TYPE' OF STRUCTURE <ls_dec> TO <fs_val>.
+        IF sy-subrc = 0 AND <fs_val> IS ASSIGNED.
+          lv_item_type = <fs_val>.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 4) Map LAISO (IV_LANGUAGE) -> 1-char SPRAS (for /RPM/PHASE_T-LANGU)
+    "----------------------------------------------------------------------
+    CLEAR lv_spras.
+    IF iv_language IS NOT INITIAL.
+*      SELECT SINGLE spras
+*        FROM t002
+*        INTO lv_spras
+*       WHERE laiso = iv_language.
+      SELECT SINGLE spras
+        FROM v_t002_laiso
+        INTO lv_spras
+       WHERE laiso = iv_language.
+    ENDIF.
+    IF lv_spras IS INITIAL.
+      lv_spras = sy-langu.
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 5) If PHASE_TEXT is empty, read from /RPM/PHASE_T with your keys
+    "----------------------------------------------------------------------
+    IF lv_phase_text IS INITIAL AND lv_phase_id IS NOT INITIAL.
+      IF lv_item_type IS INITIAL.
+        " Item type not passed; read by PHASE_ID + LANGU
+        SELECT SINGLE phase_text
+          FROM /rpm/phase_t
+          INTO lv_phase_text
+         WHERE phase_id = lv_phase_id
+           AND langu    = lv_spras.
+        IF sy-subrc <> 0 OR lv_phase_text IS INITIAL.
+          SELECT SINGLE phase_text
+            FROM /rpm/phase_t
+            INTO lv_phase_text
+           WHERE phase_id = lv_phase_id
+             AND langu    = 'E'.
+        ENDIF.
+      ELSE.
+        " Full key read: PHASE_ID + ITEM_TYPE + LANGU
+        SELECT SINGLE phase_text
+          FROM /rpm/phase_t
+          INTO lv_phase_text
+         WHERE phase_id  = lv_phase_id
+           AND item_type = lv_item_type
+           AND langu     = lv_spras.
+        IF sy-subrc <> 0 OR lv_phase_text IS INITIAL.
+          SELECT SINGLE phase_text
+            FROM /rpm/phase_t
+            INTO lv_phase_text
+           WHERE phase_id  = lv_phase_id
+             AND item_type = lv_item_type
+             AND langu     = 'E'.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lv_phase_text IS INITIAL.
+      RETURN. " cannot map phase → no snapshot
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 6) Segment 2 from PHASE_TEXT
+    "----------------------------------------------------------------------
+    DATA lv_phase_up TYPE string.
+    lv_phase_up = lv_phase_text.
+    TRANSLATE lv_phase_up TO UPPER CASE.
+
+    CLEAR lv_seg2.
+    IF lv_phase_up CS 'DETAILED IDEATION'.
+      lv_seg2 = 'DI'.
+    ELSEIF lv_phase_up CS 'PRE-FEASIBILITY'.
+      lv_seg2 = 'PF'.
+    ELSEIF lv_phase_up CS 'FEASIBILITY'.
+      lv_seg2 = 'FE'.
+    ELSEIF lv_phase_up CS 'EXECUTION'.
+      lv_seg2 = 'EX'.
+    ELSEIF lv_phase_up CS 'CLOSURE'.
+      lv_seg2 = 'CL'.
+    ELSEIF lv_phase_up CS 'COMPLETION'.
+      lv_seg2 = 'CM'.
+    ELSE.
+      RETURN. " unmapped → skip
+    ENDIF.
+
+    "----------------------------------------------------------------------
+    " 7) Build Version Info ID and Name
+    "     ID:  DP-<Seg2>-<Seg3>-YYYY.MM.DD_HH:MM
+    "     Name: 'Snapshot <PHASE_TEXT> Approved'  (per your requirement)
+    "----------------------------------------------------------------------
+    CLEAR: lv_date_c, lv_time_c, lv_ts, lv_ver_info_id, lv_ver_info_name.
+
+    CONCATENATE sy-datum+0(4) '.' sy-datum+4(2) '.' sy-datum+6(2) INTO lv_date_c.
+    CONCATENATE sy-uzeit+0(2) ':' sy-uzeit+2(2) INTO lv_time_c.
+    CONCATENATE lv_date_c '_' lv_time_c INTO lv_ts.
+
+    CONCATENATE 'DP-' lv_seg2 '-' lv_seg3 '-' lv_ts INTO lv_ver_info_id.
+    CONCATENATE 'Snapshot ' lv_phase_text ' Approved' INTO lv_ver_info_name.
+
+    "----------------------------------------------------------------------
+    " 8) Create Snapshot (no COMMIT WORK here)
+    "----------------------------------------------------------------------
+    DATA: lv_version_guid TYPE crmt_object_guid,
+          lv_ev_rc        TYPE i,
+          lt_messages     TYPE /rpm/tt_messages.
+
+
+*  CALL FUNCTION '/RPM/ITEMS_VERS_CREATE'
+*    EXPORTING
+*      iv_item_guid         = lv_item_guid
+*      iv_version_info_id   = lv_ver_info_id
+*      iv_version_info_name = lv_ver_info_name
+*    IMPORTING
+*      ev_version_guid      = lv_version_guid
+*    EXCEPTIONS
+*      failed               = 1
+*      OTHERS               = 2.
+    ls_item_guid-guid = lv_item_guid.
+    APPEND ls_item_guid TO lt_item_guids.
+
+    " IMPORTANT: set to your IMG value (typically '01')
+    lv_version_type = '01'.
+
+    lv_hdr_name = lv_ver_info_id.
+    lv_cp_name  = lv_ver_info_name.
+
+    CALL FUNCTION '/RPM/ITEMS_VERS_CREATE'
+      EXPORTING
+        it_item_guids      = lt_item_guids
+        iv_version_type    = lv_version_type
+        iv_vers_hdr_name   = lv_hdr_name
+        iv_cp_version_name = lv_cp_name
+        iv_log_messages    = abap_true
+      IMPORTING
+        ev_rc              = lv_ev_rc
+        et_messages        = lt_messages.
+
+    IF lv_ev_rc IS NOT INITIAL.
+      " Optional: map lt_messages to your UI messages if desired
+      RETURN.
+    ENDIF.
+
+    "If creation fails we simply return; framework controls LUW and messages.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~ITEM_UI_CONFIG_MODIFY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_ITEM_ATTRIBUTES             TYPE        /RPM/TS_ITEM_D_API
+* | [--->] IV_EDIT_MODE                   TYPE        /RPM/TV_EDIT_MODE(optional)
+* | [--->] IS_MODE                        TYPE        /RPM/TS_CHANGE_MODE(optional)
+* | [<-->] CT_FIELD_DESCRIPTION           TYPE        /RPM/TT_FIELDS_DESCRIPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD /rpm/if_ex_item_api~item_ui_config_modify.
+    DATA : lt_dd03p TYPE TABLE OF dd03p.
+    IF is_item_attributes IS NOT INITIAL.
+      CALL METHOD zcl_ppm_custom_field_enhncmt=>item_check_with_parents
+       EXPORTING
+          im_item_attributes = is_item_attributes
+        RECEIVING
+          rt_dd03p           = lt_dd03p.
+
+      LOOP AT ct_field_description ASSIGNING FIELD-SYMBOL(<fs_field_description>).
+        IF line_exists( lt_dd03p[ fieldname = <fs_field_description>-fieldname ] ).
+          <fs_field_description>-read_only = abap_true.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~VERSION_UI_CONFIG_MODIFY
+* +-------------------------------------------------------------------------------------------------+
+* | [<-->] CV_SET_CPRO_VERSION_CHECKBOX   TYPE        ABAP_BOOL
+* | [<-->] CV_SET_VERSION_TYPE_DROPDOWN   TYPE        STRING
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method /RPM/IF_EX_ITEM_API~VERSION_UI_CONFIG_MODIFY.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~COLUMNS_USED_IN_ALTER_LIST
+* +-------------------------------------------------------------------------------------------------+
+* | [<-->] CV_ALL_COLUMNS                 TYPE        BOOLEAN (default ='X')
+* | [<-->] CT_USED_COLUMNS                TYPE        DPR_TT_COLL_FIELDNAME
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method /RPM/IF_EX_ITEM_API~COLUMNS_USED_IN_ALTER_LIST.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_EP_UI_CHECKLIST->/RPM/IF_EX_ITEM_API~CPROJECT_BAPI_MESSAGES
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_FNAME                       TYPE        CHAR120(optional)
+* | [<-->] CT_RETURN                      TYPE        BAPIRETTAB
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method /RPM/IF_EX_ITEM_API~CPROJECT_BAPI_MESSAGES.
+  endmethod.
+ENDCLASS.
