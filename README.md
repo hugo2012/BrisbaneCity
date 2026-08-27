@@ -60,6 +60,9 @@ Config binding event change user status for notification in tcode BSVW
 
 <img width="1838" height="759" alt="image" src="https://github.com/user-attachments/assets/a7a2623f-40bd-4451-a498-71f7bf5305a5" />
 
+<img width="1826" height="830" alt="image" src="https://github.com/user-attachments/assets/773bf53c-fba1-4db2-95e2-14434828db78" />
+
+
 
 
 
