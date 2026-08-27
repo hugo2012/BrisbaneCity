@@ -1,0 +1,287 @@
+METHOD onactionon_enter .
+
+*  DATA: lv_memory_id    TYPE char20,
+*        ls_item_details TYPE /rpm/ts_item_d_api,
+*        lr_node         TYPE REF TO if_wd_context_node,
+*        lr_el           TYPE REF TO if_wd_context_element.
+*
+*  "------------------------------------------------------
+*  " 1. Get LT_ITEM node (0..1 cardinality in your view)
+*  "------------------------------------------------------
+*  lr_node = wd_context->get_child_node( name = 'LT_ITEM' ).
+*  IF lr_node IS INITIAL.
+*    RETURN.
+*  ENDIF.
+*
+*  lr_el = lr_node->get_element( ).
+*  IF lr_el IS INITIAL.
+*    RETURN.   "No element => avoid dump
+*  ENDIF.
+*
+*  "------------------------------------------------------
+*  " 2. Read Position/Name/Text from MEMORY ID (BRF+ output)
+*  "------------------------------------------------------
+*  lv_memory_id = |EAM_ASSET_{ sy-uname }|.
+*  IMPORT eam_external_id = ls_item_details FROM MEMORY ID lv_memory_id.
+*
+*  IF ls_item_details IS INITIAL.
+*    RETURN.  "Avoid dump
+*  ENDIF.
+*
+*  DATA lo_nd_lt_item TYPE REF TO if_wd_context_node.
+*
+*  DATA lo_el_lt_item TYPE REF TO if_wd_context_element.
+*  DATA ls_lt_item TYPE wd_this->element_lt_item.
+*  DATA lv_des_point_govrole TYPE wd_this->element_lt_item-des_point_govrole.
+*
+** navigate from <CONTEXT> to <LT_ITEM> via lead selection
+*  lo_nd_lt_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+*
+** @TODO handle non existant child
+** IF lo_nd_lt_item IS INITIAL.
+** ENDIF.
+*
+** get element via lead selection
+*  lo_el_lt_item = lo_nd_lt_item->get_element( ).
+** alternative access  via index
+** lo_el_lt_item = lo_nd_lt_item->get_element( index = 1 ).
+** @TODO handle not set lead selection
+*  IF lo_el_lt_item IS INITIAL.
+*  ENDIF.
+*
+** get single attribute
+*  lo_el_lt_item->get_attribute(
+*    EXPORTING
+*      name =  `DES_POINT_GOVROLE`
+*    IMPORTING
+*      value = lv_des_point_govrole ).
+*  "------------------------------------------------------
+*  " 3. Update the dependent fields in LT_ITEM
+*  "------------------------------------------------------
+*  IF ls_item_details-zzgovernance_01 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_NAME'
+*        value = ls_item_details-zzname_01 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_01 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_02 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_02 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_02 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_03 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_03 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_03 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_04 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_04 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_04 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_05 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_05 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_05 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_06 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_06 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_06 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_07 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_07 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_07 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_08 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_08 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_08 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_09 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_09 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_09 ).
+*  ENDIF.
+*  IF ls_item_details-zzgovernance_10 EQ lv_des_point_govrole.
+*    lr_el->set_attribute(
+*      name  = 'PRJROLE_NAME'
+*      value = ls_item_details-zzname_10 ).
+*
+*    lr_el->set_attribute(
+*        name  = 'PRJROLE_POSITION'
+*        value = ls_item_details-zzposition_10 ).
+*  ENDIF.
+**  lr_el->set_attribute(
+**      name  = 'POSITION_ID' ).  "If different, adjust
+
+
+*************************** DO NOT DELETE********************
+
+  DATA: lv_memory_id    TYPE char20,
+        ls_item_details TYPE /rpm/ts_item_d_api,
+        lr_node         TYPE REF TO if_wd_context_node,
+        lr_el           TYPE REF TO if_wd_context_element.
+
+  "------------------------------------------------------
+  " 1. Get LT_ITEM node
+  "------------------------------------------------------
+  lr_node = wd_context->get_child_node( name = 'LT_ITEM' ).
+  IF lr_node IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  lr_el = lr_node->get_element( ).
+  IF lr_el IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  "------------------------------------------------------
+  " 2. Read from memory
+  "------------------------------------------------------
+  lv_memory_id = |EAM_ASSET_{ sy-uname }|.
+  IMPORT eam_external_id = ls_item_details FROM MEMORY ID lv_memory_id.
+
+  IF ls_item_details IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  "------------------------------------------------------
+  " 3. Get Governance Role
+  "------------------------------------------------------
+  DATA: lo_nd_lt_item        TYPE REF TO if_wd_context_node,
+        lo_el_lt_item        TYPE REF TO if_wd_context_element,
+        lv_des_point_govrole TYPE zdp_gov_role.
+
+  lo_nd_lt_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+  lo_el_lt_item = lo_nd_lt_item->get_element( ).
+
+  IF lo_el_lt_item IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  lo_el_lt_item->get_attribute(
+    EXPORTING name = 'DES_POINT_GOVROLE'
+    IMPORTING value = lv_des_point_govrole ).
+
+  "------------------------------------------------------
+  " 4. Prepare roles table (IMPORTANT: truncate to CHAR12)
+  "------------------------------------------------------
+
+  TYPES: BEGIN OF ty_role,
+           govrole TYPE zdp_gov_role,
+           name    TYPE pa0001-ename,
+           pos_txt TYPE string,
+         END OF ty_role.
+
+  DATA: lt_roles TYPE STANDARD TABLE OF ty_role,
+        ls_role  TYPE ty_role.
+
+
+  lt_roles = VALUE #(
+    ( govrole = ls_item_details-zzgovernance_01 name = ls_item_details-zzname_01 pos_txt = ls_item_details-zzposition_01 )
+    ( govrole = ls_item_details-zzgovernance_02 name = ls_item_details-zzname_02 pos_txt = ls_item_details-zzposition_02 )
+    ( govrole = ls_item_details-zzgovernance_03 name = ls_item_details-zzname_03 pos_txt = ls_item_details-zzposition_03 )
+    ( govrole = ls_item_details-zzgovernance_04 name = ls_item_details-zzname_04 pos_txt = ls_item_details-zzposition_04 )
+    ( govrole = ls_item_details-zzgovernance_05 name = ls_item_details-zzname_05 pos_txt = ls_item_details-zzposition_05 )
+    ( govrole = ls_item_details-zzgovernance_06 name = ls_item_details-zzname_06 pos_txt = ls_item_details-zzposition_06 )
+    ( govrole = ls_item_details-zzgovernance_07 name = ls_item_details-zzname_07 pos_txt = ls_item_details-zzposition_07 )
+    ( govrole = ls_item_details-zzgovernance_08 name = ls_item_details-zzname_08 pos_txt = ls_item_details-zzposition_08 )
+    ( govrole = ls_item_details-zzgovernance_09 name = ls_item_details-zzname_09 pos_txt = ls_item_details-zzposition_09 )
+    ( govrole = ls_item_details-zzgovernance_10 name = ls_item_details-zzname_10 pos_txt = ls_item_details-zzposition_10 )
+  ).
+
+  "Remove empty entries (VERY IMPORTANT for FAE)
+  DELETE lt_roles WHERE name IS INITIAL.
+
+
+  TYPES: BEGIN OF ty_pos,
+           name       TYPE pa0001-ename,
+           positionid TYPE hrobjid,
+         END OF ty_pos.
+
+
+  DATA: lt_pos   TYPE TABLE OF ty_pos,
+        lt_pos_h TYPE HASHED TABLE OF ty_pos WITH UNIQUE KEY name.
+
+  SELECT hcmemployeename,
+         hcmposition
+    INTO TABLE @lt_pos
+    FROM i_hcmemployeeaddressbook
+    FOR ALL ENTRIES IN @lt_roles
+   WHERE hcmemployeename = @lt_roles-name.
+
+
+  " Avoid duplicate key issue before loading hashed table
+  IF lt_pos IS NOT INITIAL.
+    SORT lt_pos BY name.
+    DELETE ADJACENT DUPLICATES FROM lt_pos COMPARING name.
+    lt_pos_h = lt_pos.
+  ENDIF.
+
+  "------------------------------------------------------
+  " 7. Find match & set UI fields
+  "------------------------------------------------------
+  LOOP AT lt_roles INTO ls_role
+    WHERE govrole = lv_des_point_govrole.
+
+    READ TABLE lt_pos_h INTO DATA(ls_pos)
+      WITH KEY name = ls_role-name.
+
+    IF sy-subrc = 0.
+      " Long text
+      lr_el->set_attribute(
+        name  = 'PRJROLE_NAME'
+        value = ls_role-name ).
+
+      " Short text
+      lr_el->set_attribute(
+        name  = 'PRJROLE_POSITION'
+        value = ls_role-pos_txt ).
+
+      " Position ID
+      lr_el->set_attribute(
+        name  = 'POSITION_ID'
+        value = ls_pos-positionid ).
+
+    ENDIF.
+    EXIT.
+  ENDLOOP.
+
+ENDMETHOD.
