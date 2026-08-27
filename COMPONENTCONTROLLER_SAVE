@@ -1,0 +1,55 @@
+METHOD save .
+
+  DATA: lt_item_tab1 TYPE TABLE OF zeppm_proj_roles.
+  DATA: ls_item_tab TYPE zeppm_proj_roles.
+  DATA lo_nd_lt_item TYPE REF TO if_wd_context_node.
+
+  DATA lt_item_tab TYPE wd_this->elements_lt_item.
+
+
+
+* navigate from <CONTEXT> to <LT_ITEM> via lead selection
+  lo_nd_lt_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+
+* @TODO handle non existant child
+* IF lo_nd_lt_item IS INITIAL.
+* ENDIF.
+  lo_nd_lt_item->get_static_attributes_table( IMPORTING table = lt_item_tab ).
+
+
+"Validate Project Roles table
+IF lt_item_tab IS INITIAL.
+  DATA(lo_message_manager) = wd_this->wd_get_api( )->get_message_manager( ).
+
+  lo_message_manager->report_error_message(
+    message_text = 'Please fill in the project roles table to support the decision point workflow.'
+  ).
+  ev_rejected = abap_true.
+  RETURN.
+ENDIF.
+
+
+  DATA: lv_memory_id TYPE char20.
+  DATA : ls_item_details TYPE /rpm/ts_item_d_api.
+  lv_memory_id = |EAM_ASSET_{ sy-uname }|.
+
+  " Importing
+  IMPORT eam_external_id = ls_item_details FROM MEMORY ID lv_memory_id.
+  IF lt_item_tab IS NOT INITIAL.
+    IF ls_item_details-external_id IS NOT INITIAL.
+      DELETE FROM zeppm_proj_roles WHERE ppm_item = ls_item_details-external_id.
+    ENDIF.
+    DATA(lv_cnt) = 0.
+    LOOP AT lt_item_tab INTO DATA(ls_item_tab1).
+      MOVE-CORRESPONDING ls_item_tab1 TO ls_item_tab.
+      lv_cnt = lv_cnt + 1.
+      ls_item_tab-zcount = lv_cnt.
+      APPEND ls_item_tab TO lt_item_tab1.
+    ENDLOOP.
+    IF lt_item_tab1 IS NOT INITIAL.
+      MODIFY zeppm_proj_roles FROM TABLE lt_item_tab1.
+    ENDIF.
+  ELSE.
+    DELETE FROM zeppm_proj_roles WHERE ppm_item = ls_item_details-external_id.
+  ENDIF.
+ENDMETHOD.
