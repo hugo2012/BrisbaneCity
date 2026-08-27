@@ -1,0 +1,35 @@
+method ONACTIONDEL_LINE .
+  " Delete the current (lead-selected) row from node LT_ITEM
+  DATA lo_nd_item TYPE REF TO if_wd_context_node.
+  DATA lo_el      TYPE REF TO if_wd_context_element.
+  DATA lv_index   TYPE i.
+  DATA lv_count   TYPE i.
+
+  " 1) Node bound to the table
+  lo_nd_item = wd_context->get_child_node( name = 'LT_ITEM' ).
+  IF lo_nd_item IS NOT BOUND.
+    RETURN.
+  ENDIF.
+
+  " 2) Lead selection
+  lv_index = lo_nd_item->get_lead_selection_index( ).
+  IF lv_index IS INITIAL OR lv_index <= 0.
+    " (Optional) show a message here – see variants below.
+    RETURN.
+  ENDIF.
+
+  " 3) Remove that element (use ELEMENT parameter)
+  lo_el = lo_nd_item->get_element( lv_index ).
+  IF lo_el IS BOUND.
+    lo_nd_item->remove_element( element = lo_el ).
+  ENDIF.
+
+  " 4) Adjust lead selection
+  lv_count = lo_nd_item->get_element_count( ).
+  IF lv_count > 0.
+    IF lv_index > lv_count.
+      lv_index = lv_count.
+    ENDIF.
+    lo_nd_item->set_lead_selection_index( lv_index ).
+  ENDIF.
+endmethod.
