@@ -1,0 +1,51 @@
+METHOD onactioncopy_item .
+  DATA lo_nd_ppmitem TYPE REF TO if_wd_context_node.
+
+  DATA lo_el_ppmitem TYPE REF TO if_wd_context_element.
+  DATA ls_ppmitem TYPE wd_this->Element_ppmitem.
+  DATA lv_ppm_item TYPE wd_this->Element_ppmitem-ppm_item.
+
+ "Import Memory ID and check for Portfolio Item
+  DATA: lv_memory_id TYPE char20.
+  DATA : ls_item_details TYPE /rpm/ts_item_d_api.
+  lv_memory_id = |EAM_ASSET_{ sy-uname }|.
+  " Importing
+  IMPORT eam_external_id = ls_item_details FROM MEMORY ID lv_memory_id.
+
+*   navigate from <CONTEXT> to <PPMITEM> via lead selection
+  lo_nd_ppmitem = wd_context->get_child_node( name = wd_this->wdctx_ppmitem ).
+
+*   get element via lead selection
+  lo_el_ppmitem = lo_nd_ppmitem->get_element( ).
+*   @TODO handle not set lead selection
+  IF lo_el_ppmitem IS INITIAL.
+  ENDIF.
+
+*   get single attribute
+  lo_el_ppmitem->get_attribute(
+    EXPORTING
+      name =  `PPM_ITEM`
+    IMPORTING
+      value = lv_ppm_item ).
+
+  IF lv_ppm_item IS NOT INITIAL.
+    DATA lo_nd_lt_item TYPE REF TO if_wd_context_node.
+    DATA lt_lt_item TYPE wd_this->Elements_lt_item.
+
+    lo_nd_lt_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+    lo_nd_lt_item->get_static_attributes_table( IMPORTING table = lt_lt_item ).
+
+*    SELECT * FROM zeppm_proj_roles APPENDING TABLE lt_lt_item WHERE ppm_item = lv_ppm_item.
+      SELECT * FROM zeppm_proj_roles
+      APPENDING TABLE @DATA(lt_copyitem)
+      WHERE ppm_item = @lv_ppm_item.
+      LOOP AT lt_copyitem INTO DATA(ls_copyitem).
+        ls_copyitem-ppm_item = ls_item_details-external_id.
+        append ls_copyitem to lt_lt_item.
+        clear : ls_copyitem.
+      ENDLOOP.
+    IF sy-subrc EQ 0.
+      lo_nd_lt_item->bind_table( new_items = lt_lt_item  set_initial_elements = abap_true ).
+    ENDIF.
+  ENDIF.
+ENDMETHOD.
