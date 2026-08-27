@@ -1,0 +1,41 @@
+METHOD onactionadd_line .
+  "----------------------------------------------------------------------
+  " Purpose : Add a new editable row to table bound to node LT_ITEM
+  " View    : ZVI_PRJROLES_MAIN (example)
+  " Node    : LT_ITEM  (cardinality 0..n)
+  " Author  : Viswa
+  "----------------------------------------------------------------------
+  "----------------------------------------------------------------------
+  " Add a new editable row to table bound to node LT_ITEM (0..n)
+  "----------------------------------------------------------------------
+  DATA lo_nd_item TYPE REF TO if_wd_context_node.
+  DATA lo_el_item TYPE REF TO if_wd_context_element.
+  DATA lr_element  TYPE REF TO if_wd_context_element.
+  DATA lt_item    TYPE TABLE OF wd_this->element_lt_item.
+  DATA ls_item    TYPE wd_this->element_lt_item.
+  DATA lv_index     TYPE i.
+  DATA: lv_memory_id TYPE char20.
+  DATA : lv_external_id TYPE /rpm/ts_item_d_api.
+* Get Data in Table UI
+  lo_nd_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+  lo_nd_item->get_static_attributes_table( IMPORTING table = lt_item ).
+  "Get Functional Location Value
+  "lo_nd_asset = wd_context->get_child_node( name = wd_this->wdctx_functionlocation ).
+  lo_el_item = lo_nd_item->get_element( ).
+  "Import Memory ID and check for Portfolio Item
+  lv_memory_id = |EAM_ASSET_{ sy-uname }|.
+  " Importing
+  IMPORT eam_external_id = lv_external_id FROM MEMORY ID lv_memory_id.
+  CLEAR : ls_item.
+  ls_item-ppm_item = lv_external_id-guid.
+  ls_item-ppm_item = lv_external_id-external_id.
+  IF ls_item IS NOT INITIAL.
+    APPEND ls_item TO lt_item.
+  ENDIF.
+  CLEAR: ls_item.
+
+
+  lo_nd_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+  lo_nd_item->bind_table( new_items = lt_item  set_initial_elements = abap_true ).
+
+ENDMETHOD.
