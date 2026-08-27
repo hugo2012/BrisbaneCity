@@ -1,0 +1,108 @@
+* Intf.: if_zvi_projroles_main
+* Purp.: programming interface for the application class of this
+*        controller only
+*        controller:  <ZVI_PROJROLES_MAIN> of
+*        component:   <zwda_maintain_projroles>
+* UDate: 20260827 131923
+*=====================================================================*
+interface if_zvi_projroles_main.
+
+* +-------------------------------------------------------------------+
+* |  context type definitions                                         |
+* +-------------------------------------------------------------------+
+
+  constants:
+    wdctx_context type string value `CONTEXT`.
+  types:
+    begin of Element_context,
+      REF_URL  type STRING,
+    end of Element_context,  "#EC NEEDED
+    Elements_context type
+       standard table of Element_context
+       with default key. "#EC NEEDED
+  constants:
+    wdctx_lt_item type string value `LT_ITEM`.
+  types:
+    Element_lt_item type ZEPPM_PROJ_ROLES,
+    Elements_lt_item type
+       standard table of Element_lt_item
+       with default key. "#EC NEEDED
+  constants:
+    wdctx_ppmitem type string value `PPMITEM`.
+  types:
+    Element_ppmitem type ZEPPM_PROJ_ROLES,
+    Elements_ppmitem type
+       standard table of Element_ppmitem
+       with default key. "#EC NEEDED
+********
+* @Returns:  controller runtime interface
+********
+  methods wd_get_api
+    returning
+      value(Result) type ref to IF_WD_VIEW_CONTROLLER. "#EC NEEDED
+
+
+********
+* @Purpose:  creates an action during runtime
+********
+   methods wd_create_action
+     importing
+       Event_Handler   type String
+       Is_Validating   type Wdy_Boolean default ''
+       Command         type String
+       Text_Key        type String
+     returning
+       value(Result) type ref to If_Wd_Action.    "#EC NEEDED
+
+* +-------------------------------------------------------------------+
+* |  action getters                                                   |
+* +-------------------------------------------------------------------+
+
+  methods Get_add_line_Act
+    returning
+      value(Result) type ref to If_Wd_Action.    "#EC NEEDED
+  methods Get_del_line_Act
+    returning
+      value(Result) type ref to If_Wd_Action.    "#EC NEEDED
+  methods Get_on_enter_Act
+    returning
+      value(Result) type ref to If_Wd_Action.    "#EC NEEDED
+  methods Get_copy_item_Act
+    returning
+      value(Result) type ref to If_Wd_Action.    "#EC NEEDED
+  methods Get_display_workflow_log_Act
+    returning
+      value(Result) type ref to If_Wd_Action.    "#EC NEEDED
+
+* +-------------------------------------------------------------------+
+* |  component & controller usages                                    |
+* +-------------------------------------------------------------------+
+
+**********
+* @Returns:  controller <componentcontroller>
+*            of usage   <9bvfwtfq2695pwzwkciifg573>
+**********
+  methods  get_componentcontroller_ctr
+    returning
+      value(Result) type ref to ig_componentcontroller. "#EC NEEDED
+
+* +-------------------------------------------------------------------+
+* |  event handlers                                                   |
+* +-------------------------------------------------------------------+
+
+  methods ONACTIONADD_LINE
+    importing
+      wdevent  type REF TO cl_wd_custom_event   ."#EC NEEDED
+  methods ONACTIONCOPY_ITEM
+    importing
+      wdevent  type REF TO cl_wd_custom_event   ."#EC NEEDED
+  methods ONACTIONDEL_LINE
+    importing
+      wdevent  type REF TO cl_wd_custom_event   ."#EC NEEDED
+  methods ONACTIONDISPLAY_WORKFLOW_LOG
+    importing
+      wdevent  type REF TO cl_wd_custom_event   ."#EC NEEDED
+  methods ONACTIONON_ENTER
+    importing
+      wdevent  type REF TO cl_wd_custom_event   ."#EC NEEDED
+endinterface.
