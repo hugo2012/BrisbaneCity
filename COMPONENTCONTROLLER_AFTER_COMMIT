@@ -1,0 +1,15 @@
+method AFTER_COMMIT .
+
+
+DATA lo_msg TYPE REF TO if_wd_message_manager.
+  lo_msg = wd_this->wd_get_api( )->get_message_manager( ).
+
+  " Free-text success (parameter is MESSAGE_TEXT)
+  lo_msg->report_success( message_text = 'Project Roles saved.' ).
+
+  " (Optional) Dequeue if you enqueued in SAVE
+  " CALL FUNCTION 'DEQUEUE_EZPPM_PROJ_ROLES'.
+
+
+
+endmethod.
