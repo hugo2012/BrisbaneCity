@@ -1,0 +1,69 @@
+METHOD wddoinit .
+  DATA lo_nd_lt_item TYPE REF TO if_wd_context_node.
+  DATA lt_lt_item TYPE wd_this->elements_lt_item.
+  DATA lt_projroles    TYPE TABLE OF wd_this->element_lt_item.
+  DATA ls_projroles    TYPE wd_this->element_lt_item.
+*   navigate from <CONTEXT> to <LT_ITEM> via lead selection
+  lo_nd_lt_item = wd_context->get_child_node( name = wd_this->wdctx_lt_item ).
+*   @TODO handle non existant child
+*   IF lo_nd_lt_item IS INITIAL.
+*   ENDIF.
+  "Import Memory ID and check for Portfolio Item
+  DATA: lv_memory_id TYPE char20.
+  DATA : ls_item_details TYPE /rpm/ts_item_d_api.
+  lv_memory_id = |EAM_ASSET_{ sy-uname }|.
+  " Importing
+  IMPORT eam_external_id = ls_item_details FROM MEMORY ID lv_memory_id.
+*  wd_context->set_attribute( name = 'POSITION_ID'
+*                             value = ls_item_details-zposid ).  "if exists
+
+
+*  * @TODO compute values
+*  * e.g. call a model function
+*
+  IF ls_item_details IS NOT INITIAL.
+    SELECT  * FROM zeppm_proj_roles INTO TABLE @DATA(lt_projroles1) WHERE ppm_item = @ls_item_details-external_id.
+
+    LOOP AT lt_projroles1 INTO DATA(ls_item_details1).
+      ls_projroles-ppm_item = ls_item_details1-ppm_item.
+      ls_projroles-position_id = ls_item_details1-position_id.
+      ls_projroles-prjrole_name = ls_item_details1-prjrole_name.
+      ls_projroles-prjrole_position = ls_item_details1-prjrole_position.
+      ls_projroles-prjrole_role = ls_item_details1-prjrole_role.
+      ls_projroles-prjrole_addlresp = ls_item_details1-prjrole_addlresp.
+      ls_projroles-des_point_govrole = ls_item_details1-des_point_govrole.
+      ls_projroles-workflow_action = ls_item_details1-workflow_action.
+      ls_projroles-workflow_seq = ls_item_details1-workflow_seq.
+      ls_projroles-workflow_seq_var = ls_item_details1-workflow_seq_var.
+
+      APPEND ls_projroles TO lt_projroles.
+      CLEAR ls_projroles.
+    ENDLOOP.
+    IF lt_projroles IS NOT INITIAL.
+      lo_nd_lt_item->bind_table( new_items = lt_projroles set_initial_elements = abap_true ).
+    ENDIF.
+  ENDIF.
+
+"Added by 117107 - Dynamically assign URL
+
+  DATA: lo_el TYPE REF TO if_wd_context_element,
+       lv_url TYPE STRING.
+
+*  lv_url = 'https://s4hana-dev.sappce.brisbane.qld.gov.au/sap/bc/ui2/flp?sap-client=100&sap-language=EN#Decision_Point-display'.
+  TRY.
+  CALL METHOD zcl_flp_url_builder=>get_flp_url
+    EXPORTING
+      iv_semantic_object   = 'Decision_Point-display'
+    RECEIVING
+      rv_url               = lv_url.
+    CATCH cx_parameter_invalid.
+  ENDTRY.
+
+
+  lo_el = wd_context->get_element( ).
+
+  lo_el->set_attribute(
+  name  = 'REF_URL'
+  value = lv_url
+).
+ENDMETHOD.
