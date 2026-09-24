@@ -106,10 +106,7 @@ METHOD if_swf_flex_ifs_run_appl_step~on_creation_callback.
       priority              =  iv_priority   " New Priority of Work Item
       wi_id                 = lv_workitem_id    " Work Item ID
 *      do_commit             = 'X'    " Indicator for Control of Commit Logic
-*      authorization_checked = SPACE    " Indicator for Control of Authorization Check
-*      preconditions_checked = SPACE    " Indicator for Control of Status Checks and Type Checks
       propagate_to_flow     = abap_true    " Indicator for Passing-On Changed Priority
-*      funcname              = SPACE    " Function Name for Success Log
     EXCEPTIONS
       no_authorization      = 1
       invalid_type          = 2
