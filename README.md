@@ -64,6 +64,9 @@ Config binding event change user status for notification in tcode BSVW
 
 <img width="1478" height="475" alt="image" src="https://github.com/user-attachments/assets/7bbeb71c-c39e-4798-b8e7-57deee5938a3" />
 
+change Priority for workflow item
+CALL function SWW_WI_PRIORITY_CHANGE
+
 
 
 
