@@ -101,19 +101,18 @@ METHOD if_swf_flex_ifs_run_appl_step~on_creation_callback.
       ENDCASE.
 
       " 4. Override SAP default priority 5
-      CALL FUNCTION 'SWW_WI_PRIORITY_CHANGE'
-    EXPORTING
-      priority              =  iv_priority   " New Priority of Work Item
-      wi_id                 = lv_workitem_id    " Work Item ID
-*      do_commit             = 'X'    " Indicator for Control of Commit Logic
-      propagate_to_flow     = abap_true    " Indicator for Passing-On Changed Priority
-    EXCEPTIONS
-      no_authorization      = 1
-      invalid_type          = 2
-      update_failed         = 3
-      invalid_status        = 4
-      others                = 5
-    .
+    CALL FUNCTION 'SWW_WI_PRIORITY_CHANGE'
+      EXPORTING
+        priority          = lv_priority
+        wi_id             =  lv_wi_id
+        do_commit         = abap_false
+        propagate_to_flow = abap_false
+      EXCEPTIONS
+        no_authorization  = 1
+        invalid_type      = 2
+        update_failed     = 3
+        invalid_status    = 4
+        OTHERS            = 5.
     ENDIF.
 
   ENDMETHOD.
