@@ -65,7 +65,63 @@ Config binding event change user status for notification in tcode BSVW
 <img width="1478" height="475" alt="image" src="https://github.com/user-attachments/assets/7bbeb71c-c39e-4798-b8e7-57deee5938a3" />
 
 change Priority for workflow item
-CALL function SWW_WI_PRIORITY_CHANGE
+METHOD if_swf_flex_ifs_run_appl_step~on_creation_callback.
+    
+    DATA: lv_wi_id       TYPE sww_wiid,
+          lv_bus_prio    TYPE string,
+          lv_sap_prio    TYPE sww_wiprio,
+          lv_subrc       TYPE sysubrc.
+
+    " 1. Call standard standard custom attribute logic (existing code)
+    TRY.
+        cl_mmpur_wfl_po_helper=>get( )->populate_my_inbox_attributes( ... ).
+      CATCH cx_swf_flex_ifs_run_exception
+            cx_swf_flex_run_def_exception INTO DATA(lx_exp).
+        RAISE EXCEPTION TYPE cx_swf_flex_ifs_run_exception EXPORTING previous = lx_exp.
+    ENDTRY.
+
+    " 2. Get active work item ID from context
+    lv_wi_id = io_step_runtime_context->get_workitem_id( ).
+
+    IF lv_wi_id IS NOT INITIAL.
+      " Fetch your application/variation business priority value here
+      " Example: Reading from business object header or container
+      " lv_bus_prio = ...
+
+      " 3. Map your business priority to SAP priority scale (1 to 9)
+      CASE lv_bus_prio.
+        WHEN 'HIGH' OR '1'.
+          lv_sap_prio = '1'. " Very High / High
+        WHEN 'MEDIUM' OR '2'.
+          lv_sap_prio = '5'. " Medium (Default)
+        WHEN 'LOW' OR '3'.
+          lv_sap_prio = '8'. " Low
+        WHEN OTHERS.
+          lv_sap_prio = '5'.
+      ENDCASE.
+
+      " 4. Override SAP default priority 5
+      CALL FUNCTION 'SWW_WI_PRIORITY_CHANGE'
+    EXPORTING
+      priority              =  iv_priority   " New Priority of Work Item
+      wi_id                 = lv_workitem_id    " Work Item ID
+*      do_commit             = 'X'    " Indicator for Control of Commit Logic
+*      authorization_checked = SPACE    " Indicator for Control of Authorization Check
+*      preconditions_checked = SPACE    " Indicator for Control of Status Checks and Type Checks
+      propagate_to_flow     = abap_true    " Indicator for Passing-On Changed Priority
+*      funcname              = SPACE    " Function Name for Success Log
+    EXCEPTIONS
+      no_authorization      = 1
+      invalid_type          = 2
+      update_failed         = 3
+      invalid_status        = 4
+      others                = 5
+    .
+    ENDIF.
+
+  ENDMETHOD.
+
+
 
 
 
