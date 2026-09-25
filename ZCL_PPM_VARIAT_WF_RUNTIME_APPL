@@ -9,9 +9,11 @@ public section.
 
   methods IF_SWF_FLEX_IFS_RUN_APPL_STEP~AFTER_COMPLETION_CALLBACK
     redefinition .
+  methods IF_SWF_FLEX_IFS_RUN_APPL_STEP~ON_DEADLINE_ACTION_CALLBACK
+    redefinition .
   methods IF_SWF_FLEX_IFS_RUN_APPL~ON_RESTART_CALLBACK
     redefinition .
-  methods IF_SWF_FLEX_IFS_RUN_APPL_STEP~ON_DEADLINE_ACTION_CALLBACK
+  methods IF_SWF_FLEX_IFS_RUN_APPL_STEP~ON_CREATION_CALLBACK
     redefinition .
 protected section.
 private section.
@@ -208,23 +210,24 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
 * | [--->] IV_CONDITIONAL_RESTART         TYPE        ABAP_BOOL (default =ABAP_TRUE)
 * | [!CX!] CX_SWF_FLEX_IFS_RUN_EXCEPTION
 * +--------------------------------------------------------------------------------------</SIGNATURE>
-  METHOD IF_SWF_FLEX_IFS_RUN_APPL~ON_RESTART_CALLBACK.
+  METHOD if_swf_flex_ifs_run_appl~on_restart_callback.
 *------------------------------------------------------------------------------------*
 *-->Clear the variable on Restart
 *------------------------------------------------------------------------------------*
 *--> Variables
-    DATA: lv_last_StepNumber      TYPE numc3,
-          lv_curr_workflow_action TYPE zwrkflow_act,
-          LV_CURR_WORKFLOW_ACTION_TEXT TYPE CHAR80,
-          LV_GOVENANCEROLE_TEXT TYPE CHAR80,
-          LV_ISLAST_APPROVAL TYPE BOOLE_D.
+    DATA: lv_last_StepNumber           TYPE numc3,
+          lv_curr_workflow_action      TYPE zwrkflow_act,
+          lv_curr_workflow_action_text TYPE char80,
+          lv_govenancerole_text        TYPE char80,
+          lv_islast_approval           TYPE boole_d.
     DATA: lv_wfinst_main    TYPE rpm_tv_guid,
           lv_chk_crt_wfinst TYPE boole_d,
           lv_step_uuid      TYPE rpm_tv_guid,
           lr_actions        TYPE RANGE OF zwrkflow_act,
           lsr_action        LIKE LINE OF lr_actions,
-          lv_variation_type TYPE QMART,
-          lv_portfolioitem TYPE /RPM/TV_EXTID.
+          lv_variation_type TYPE qmart,
+          lv_portfolioitem  TYPE /rpm/tv_extid,
+          lv_wf_path        TYPE zde_apprv_path..
 
 *------------------------------------------------------------------------------------*
     TEST-SEAM container_object.
@@ -232,7 +235,7 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
     END-TEST-SEAM.
 
     IF lo_container IS BOUND.
-      Try.
+      TRY.
 * Get Variation type
 *-->VARIATION_TYPE
           lo_container->get(
@@ -251,7 +254,11 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
             IMPORTING
               value      = lv_portfolioitem
           ).
-    CATCH cx_swf_cnt_cont_access_denied. " Changed Access Not Allowed
+
+* Get workflow path
+          lo_container->get( EXPORTING name = 'WF_PATH'  IMPORTING value = lv_wf_path ).
+
+        CATCH cx_swf_cnt_cont_access_denied. " Changed Access Not Allowed
         CATCH cx_swf_cnt_elem_access_denied. " Value/Unit Must Not Be Changed
         CATCH cx_swf_cnt_elem_not_found.     " Element Not in the Container
         CATCH cx_swf_cnt_elem_type_conflict. " Type Conflict Between Value and Current Parameter
@@ -260,26 +267,52 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
         CATCH cx_swf_cnt_container.          " Exception in the Container Service
 
       ENDTRY.
-          lv_chk_crt_wfinst = abap_true.
+      lv_chk_crt_wfinst = abap_true.
 
 *       Get the first step number instead of using the Iv_stepnumber.
 
-          " Modern internal table population using VALUE operator with conditional logic
-          lr_actions = VALUE #(
-            sign   = 'I'
-            option = 'EQ'
-            ( low =  zif_ppm_variation_wf_c=>c_workflow_action-endorser )
-            " The base sign/option carry over to subsequent rows if they aren't explicitly overridden
-            ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
-            ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
-            "( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
-          ).
+      " Modern internal table population using VALUE operator with conditional logic
+      lr_actions = VALUE #(
+        sign   = 'I'
+        option = 'EQ'
+        ( low =  zif_ppm_variation_wf_c=>c_workflow_action-endorser )
+        ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase )
+        ( low = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest )
+        "( low = zif_ppm_variation_wf_c=>c_workflow_action-decpnt_manager )
+      ).
 
-          IF lv_variation_type = 'Z4'."Internal
+      IF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
 
-            DATA(lv_wf_path) = '01'.
-            " read project role.
-            SELECT portfolioitem,
+        "DATA(lv_wf_path) = '01'.
+        " read project role.
+        SELECT portfolioitem,
+          counter,
+          positionid,
+          rolename,
+          roleposition,
+          role,
+          roleadditionalresponsible,
+          decpointgovernancerole,
+          workflowaction,
+          workflowsequence,
+          variationsequence
+         FROM zi_ppm_projectroles
+       WHERE portfolioitem = @lv_portfolioitem
+        AND workflowaction IN @lr_actions
+        AND positionid IS NOT INITIAL
+        AND variationsequence IS NOT INITIAL
+       ORDER BY variationsequence  ASCENDING
+       INTO TABLE @DATA(lt_proj_roles).
+        IF sy-subrc IS INITIAL.
+          "DATA(lv_total_steps) = lines( lt_proj_roles ).
+          DATA(ls_proj_roles) = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
+          DATA(lv_step_number_first) =  ls_proj_roles-variationsequence.
+          DATA(lv_workflow_seq_var)      = lv_step_number_first.
+        ENDIF.
+        DATA(lv_total_steps) = lines( lt_proj_roles ).
+        " DATA(lv_wf_path) = '01'.
+      ELSEIF lv_wf_path = zif_ppm_variation_wf_c=>c_workflow_type-external."External
+        SELECT portfolioitem,
               counter,
               positionid,
               rolename,
@@ -290,50 +323,22 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
               workflowaction,
               workflowsequence,
               variationsequence
-             FROM zi_ppm_projectroles
-           WHERE portfolioitem = @lv_portfolioitem
-            AND workflowaction IN @lr_actions
-            AND positionid IS NOT INITIAL
-            AND variationsequence IS NOT INITIAL
-           ORDER BY variationsequence  ASCENDING
-           INTO TABLE @DATA(lt_proj_roles).
-            IF sy-subrc IS INITIAL.
-              "DATA(lv_total_steps) = lines( lt_proj_roles ).
-              DATA(ls_proj_roles) = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
-              DATA(lv_step_number_first) =  ls_proj_roles-variationsequence.
-              DATA(lv_workflow_seq_var)      = lv_step_number_first.
-            ENDIF.
-            DATA(lv_total_steps) = lines( lt_proj_roles ).
-            " DATA(lv_wf_path) = '01'.
-          ELSEIF lv_variation_type = 'Z1' OR lv_variation_type = 'Z2' OR lv_variation_type = 'R1'
-          OR lv_variation_type = 'R2'."External
-            SELECT portfolioitem,
-                  counter,
-                  positionid,
-                  rolename,
-                  roleposition,
-                  role,
-                  roleadditionalresponsible,
-                  decpointgovernancerole,
-                  workflowaction,
-                  workflowsequence,
-                  variationsequence
-              FROM zi_ppm_projectroles
-            WHERE portfolioitem = @lv_portfolioitem
-              AND workflowaction IN @lr_actions
-             AND positionid IS NOT INITIAL
-             AND workflowsequence IS NOT INITIAL
-            ORDER BY workflowsequence ASCENDING
-              INTO TABLE @lt_proj_roles.
-            IF sy-subrc IS INITIAL.
-              "lv_total_steps = lines( lt_proj_roles ).
-              ls_proj_roles = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
-              lv_step_number_first =  ls_proj_roles-workflowsequence.
-              DATA(lv_workflow_seq)      = lv_step_number_first.
-            ENDIF.
-            lv_total_steps = lines( lt_proj_roles ).
-            lv_wf_path = '02'.
-          ENDIF.
+          FROM zi_ppm_projectroles
+        WHERE portfolioitem = @lv_portfolioitem
+          AND workflowaction IN @lr_actions
+         AND positionid IS NOT INITIAL
+         AND workflowsequence IS NOT INITIAL
+        ORDER BY workflowsequence ASCENDING
+          INTO TABLE @lt_proj_roles.
+        IF sy-subrc IS INITIAL.
+          "lv_total_steps = lines( lt_proj_roles ).
+          ls_proj_roles = VALUE #( lt_proj_roles[ 1 ]  OPTIONAL ).
+          lv_step_number_first =  ls_proj_roles-workflowsequence.
+          DATA(lv_workflow_seq)      = lv_step_number_first.
+        ENDIF.
+        lv_total_steps = lines( lt_proj_roles ).
+        "lv_wf_path = '02'.
+      ENDIF.
 
       TRY.
 *-->StepNumber
@@ -358,7 +363,7 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
               value      = lv_curr_workflow_action
           ).
 
-           lv_curr_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+          lv_curr_workflow_action = ls_proj_roles-workflowaction.
 
           lo_container->set(
             EXPORTING
@@ -371,13 +376,24 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
             EXPORTING
               name       = 'CURR_WORKFLOW_ACTION_TEXT'
               IMPORTING
-              value      = LV_CURR_WORKFLOW_ACTION_TEXT  ).
+              value      = lv_curr_workflow_action_text  ).
 
 *-->set CURR_WORKFLOW_ACTION_TEXT
-          LV_CURR_WORKFLOW_ACTION_TEXT   = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser.
+
+           IF lv_curr_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+              DATA(lv_workflow_action_text) = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser.
+              DATA(lv_governancerole_text) = zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser.
+            ELSEIF lv_curr_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase.
+              lv_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_phase.
+              lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-pp_approver.
+            ELSEIF  lv_curr_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+              lv_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_invest.
+              lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-inv_approver.
+            ENDIF.
+          lv_curr_workflow_action_text  = lv_workflow_action_text.
           lo_container->set(
              EXPORTING name  = 'CURR_WORKFLOW_ACTION_TEXT'
-                       value = LV_CURR_WORKFLOW_ACTION_TEXT ).
+                       value = lv_curr_workflow_action_text ).
 
 *-->Fecth LV_GOVENANCEROLE_TEXT - GOVERNANCEROLE_TEXT
 
@@ -385,25 +401,25 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
             EXPORTING
               name       = 'GOVERNANCEROLE_TEXT'
               IMPORTING
-              value      = LV_GOVENANCEROLE_TEXT  ).
+              value      = lv_govenancerole_text  ).
 
 *-->Clear LV_GOVENANCEROLE_TEXT
-          LV_GOVENANCEROLE_TEXT =  zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser.
+          lv_govenancerole_text =  lv_governancerole_text .
           lo_container->set(
              EXPORTING name  = 'GOVERNANCEROLE_TEXT'
-                       value = LV_GOVENANCEROLE_TEXT  ).
+                       value = lv_govenancerole_text  ).
 
 *-->Clear LV_ISLAST_APPROVAL
           lo_container->set(
             EXPORTING
               name       = 'ISLAST_APPROVAL'
-              value      = LV_ISLAST_APPROVAL  ).
+              value      = lv_islast_approval  ).
 
 *-->Clear LV_ISLAST_APPROVAL
-          CLEAR LV_ISLAST_APPROVAL.
+          CLEAR lv_islast_approval.
           lo_container->set(
              EXPORTING name  = 'ISLAST_APPROVAL'
-                       value = LV_ISLAST_APPROVAL  ).
+                       value = lv_islast_approval  ).
 
         CATCH cx_swf_cnt_cont_access_denied. " Changed Access Not Allowed
         CATCH cx_swf_cnt_elem_access_denied. " Value/Unit Must Not Be Changed
@@ -707,4 +723,89 @@ CLASS ZCL_PPM_VARIAT_WF_RUNTIME_APPL IMPLEMENTATION.
 
     ENDIF.
   ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PPM_VARIAT_WF_RUNTIME_APPL->IF_SWF_FLEX_IFS_RUN_APPL_STEP~ON_CREATION_CALLBACK
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IO_CONTEXT                     TYPE REF TO IF_SWF_FLEX_RUN_CONTEXT
+* | [--->] IO_CURRENT_ACTIVITY            TYPE REF TO IF_SWF_FLEX_IFS_RUN_ACTIVITY
+* | [!CX!] CX_SWF_FLEX_IFS_RUN_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD if_swf_flex_ifs_run_appl_step~on_creation_callback.
+    DATA: lv_workitemid	      TYPE sww_wiid,
+          lv_step_priority    TYPE workflowsteppriority,
+          lv_bus_prio          TYPE workflowsteppriority,
+          lv_variation_number TYPE qmnum.
+    "Calling Badi for setting custom attributes and step priority of workitems
+    TRY.
+        "populate_my_inbox_attributes
+        TRY.
+            DATA(lo_workflow_container) = io_context->get_workflow_container( ).
+            lv_workitemid = io_context->get_wi_id( ).
+            lo_workflow_container->get( EXPORTING name = 'VARIATIONNUMBER'  IMPORTING value = lv_variation_number ).
+            IF lv_variation_number IS NOT INITIAL.
+              SELECT SINGLE Priok
+                FROM zi_ppm_variation_head
+              WITH PRIVILEGED ACCESS
+              WHERE qmnum = @lv_variation_number
+                INTO @DATA(LV_Priok).
+                IF sy-subrc IS INITIAL.
+                  lv_bus_prio = LV_Priok.
+                ENDIF.
+              ENDIF.
+            CATCH cx_swf_cnt_container.
+              " Handle exception if element is missing
+          ENDTRY.
+          DATA(lv_workflowsteptype) = io_current_activity->get_reference_id( ).
+          DATA(lv_execution_results) = io_current_activity->get_execution_results( ).
+          IF lv_workflowsteptype IS NOT INITIAL.
+            TRY.
+                DATA(lv_nodeid) = mo_definition->get_nodeid_via_id( lv_workflowsteptype ).
+                " 36- Rework task , when click on re-submit in my inbox
+                "9." Endorser task
+                "21." Approver task
+                IF lv_nodeid = 36 OR lv_nodeid = 9 OR lv_nodeid = 21.
+                   " 3. Map your business priority to SAP priority scale (1 to 9)
+                     CASE lv_bus_prio.
+                       WHEN '1'."Very low
+                         lv_step_priority = 8. " 8 Very low
+                       WHEN  '2'." Low
+                        lv_step_priority = 6. "6 Low
+                       WHEN '3'." Medium
+                         lv_step_priority = 5. "5 Medium
+                       WHEN '4'." High
+                        lv_step_priority = 4. "4 High
+                       WHEN '5'." very High
+                         lv_step_priority = 2. "2 Very high
+                       WHEN OTHERS.
+                         lv_step_priority = 5."set default: 5 Medium
+                     ENDCASE.
+                   CALL FUNCTION 'SWW_WI_PRIORITY_CHANGE'
+                     EXPORTING
+                       priority          = lv_step_priority
+                       wi_id             = lv_workitemid
+                       do_commit         = abap_false
+                       propagate_to_flow = abap_true
+                     EXCEPTIONS
+                       no_authorization  = 1
+                       invalid_type      = 2
+                       update_failed     = 3
+                       invalid_status    = 4
+                       OTHERS            = 5.
+                   IF sy-subrc <> 0.
+                     "Raise Error
+                   ENDIF.
+                ENDIF.
+              CATCH cx_swf_flex_run_def_exception INTO DATA(lx_exception).
+*                RAISE EXCEPTION TYPE cx_swf_flex_run_def_exception
+*                  EXPORTING
+*                    previous = lx_exception.
+            ENDTRY.
+          ENDIF.
+
+        CATCH cx_swf_flex_ifs_run_exception
+              cx_swf_flex_run_def_exception INTO DATA(lx_exp).
+      ENDTRY.
+    ENDMETHOD.
 ENDCLASS.
