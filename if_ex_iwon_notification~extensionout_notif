@@ -1,3 +1,15 @@
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZPPM_BADI_CL_VARIAT_WF->IF_EX_IWON_NOTIFICATION~EXTENSIONOUT_NOTIF
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IS_HEADER                      TYPE        VIQMEL
+* | [--->] IT_ITEM                        TYPE        TT_RFC_VIQMFE
+* | [--->] IT_CAUSE                       TYPE        TT_RFC_VIQMUR
+* | [--->] IT_TASK                        TYPE        TT_RFC_VIQMSM
+* | [--->] IT_ACTIVITY                    TYPE        TT_RFC_VIQMMA
+* | [--->] IT_PARTNER                     TYPE        TT_RFC_IHPA
+* | [<-->] CT_EXTENSIONOUT                TYPE        BAPIPAREXTAB
+* | [<-->] CT_RETURN                      TYPE        BAPIRETTAB
+* +--------------------------------------------------------------------------------------</SIGNATURE>
   METHOD if_ex_iwon_notification~extensionout_notif.
 *----------------------------------------------------------------------*
 *Created by: Huy Tran - 117001
@@ -6,16 +18,17 @@
 * Purpose:  Trigger Variation Workflow.
 * Description: Check User status update Enhancement
 * Reason:  Trigger SAP Variation workflow
-* TR:
+* TR: D41K906343
 *----------------------------------------------------------------------*
     DATA: lv_user_status_code TYPE usrsts.
     DATA: lv_pspid    TYPE /rpm/tv_extid.
     DATA: lv_wf_triggered TYPE abap_bool.
     "DATA: gs_qmel TYPE /noveco/evm_qmel.
-    FIELD-SYMBOLS: <fs_status>          TYPE any,
-                   <fs_qmel>           TYPE any.
+    FIELD-SYMBOLS: <fs_status> TYPE any,
+                   <fs_qmel>   TYPE any.
     DATA: ls_qmel          TYPE /noveco/evm_qmel,
           ls_variationhead TYPE /noveco/var_head.
+
     IF sy-tcode = '/NOVECO/EVM'.
       ASSIGN ('(/NOVECO/EVM_WORKBENCH)GS_QMEL-USER_STATUS_CODE') TO <fs_status>.
       ASSIGN ('(/NOVECO/EVM_WORKBENCH)GS_QMEL') TO <fs_qmel> .
@@ -23,14 +36,50 @@
         ls_qmel = <fs_qmel>.
         lv_user_status_code = <fs_status>.
         IF lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_pending
-          OR lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_active.
-          DATA(lo_cl_ppm_wf) = NEW zcl_ppm_variation_wf( ).
+          OR lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_active
+          OR  lv_user_status_code EQ zif_ppm_variation_wf_c=>gc_user_status_approved.
           IF ls_qmel IS NOT INITIAL.
-           " 1. Check if the flag was already set in memory for this notification/object
+            " 1. Check if the flag was already set in memory for this notification/object
             IMPORT lv_wf_triggered = lv_wf_triggered
               FROM MEMORY ID 'ZPPM_WF_TRIGGERED'.
-             IF lv_wf_triggered = abap_true.
+            IF lv_wf_triggered = abap_true.
               FREE MEMORY ID 'ZPPM_WF_TRIGGERED'.
+            ENDIF.
+            "Show the error message to prevent from submitt approval many times during the approval process.
+            " Check the current status.
+            CALL FUNCTION 'CONVERSION_EXIT_ABPSN_OUTPUT'
+              EXPORTING
+                input  = ls_qmel-pspid
+              IMPORTING
+                output = lv_pspid.
+            "read the portfolio item details for parent bucket and portfolio UUIDs
+            SELECT SINGLE ProjectPortfolioUUID,
+                          ProjectPortfolioItemUUID,
+                          ProjPrtfloItemParentObjectUUID,
+                           ProjectPortfolioItem
+              FROM ZI_ProjectPortfolioItemBasic WITH PRIVILEGED ACCESS
+             WHERE ProjectPortfolioItem = @lv_pspid
+             INTO @DATA(ls_portfolio_item).
+            IF sy-subrc IS INITIAL.
+              DATA(lv_item_guid)  = ls_portfolio_item-ProjectPortfolioItemUUID.
+            ENDIF.
+
+            SELECT status FROM zi_ppm_variat_appr WITH PRIVILEGED ACCESS "#EC CI_ALL_FIELDS_NEEDED
+            WHERE itemguid = @ls_portfolio_item-projectportfolioitemuuid
+              AND variation_number = @ls_qmel-qmnum
+              AND status IN ( @zif_ppm_variation_wf_c=>c_flow_status-in_progress , @zif_ppm_variation_wf_c=>c_flow_status-approved )
+              ORDER BY LocalCreatedAt DESCENDING
+             INTO TABLE @DATA(lt_variat_appr_stat)
+              UP TO 1 ROWS.
+            IF sy-subrc IS INITIAL.
+              IF line_exists( lt_variat_appr_stat[ status = zif_ppm_variation_wf_c=>c_flow_status-in_progress ] ).
+                MESSAGE e005(zppm_var) WITH ls_qmel-qmnum.
+                RETURN.
+              ENDIF.
+              IF line_exists( lt_variat_appr_stat[ status = zif_ppm_variation_wf_c=>c_flow_status-approved  ] ).
+                MESSAGE I006(zppm_var) WITH ls_qmel-qmnum.
+                RETURN.
+              ENDIF.
             ENDIF.
           ENDIF.
         ENDIF.
