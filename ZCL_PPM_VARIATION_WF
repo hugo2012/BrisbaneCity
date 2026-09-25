@@ -232,6 +232,7 @@ public section.
       value(IV_VAR_REASON) type /NOVECO/VAR_REASON
     exporting
       value(R_VARIATWFTYPE) type ZDE_APPRV_PATH
+      value(R_RETURN_CODE) type NUMC2
       value(R_RESULT) type BOOLE_D .
   methods UPDATE_TRACKING_STEP_RESUBMIT
     importing
@@ -915,7 +916,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
     DATA ls_tj02t TYPE tj02t.
     DATA ls_tj30t TYPE tj30t.
 
-     " 3. Mark in ABAP memory that workflow has been triggered
+    " 3. Mark in ABAP memory that workflow has been triggered
     DATA(lv_wf_triggered) = abap_true.
     EXPORT lv_wf_triggered = lv_wf_triggered
       TO MEMORY ID 'ZPPM_WF_TRIGGERED'.
@@ -962,22 +963,22 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
     IF ls_evm_qmel IS NOT INITIAL.
 
 *       get status profiles
-      SELECT qmart, stsma FROM ZI_PPM_TQ80 INTO CORRESPONDING FIELDS OF TABLE @lt_tq80
+      SELECT qmart, stsma FROM zi_ppm_tq80 INTO CORRESPONDING FIELDS OF TABLE @lt_tq80
         WHERE qmart = @ls_evm_qmel-qmart
           AND qmtyp = '04'.
-       IF sy-subrc IS INITIAL.
-           SORT lt_tq80 BY qmart.
-       ENDIF.
+      IF sy-subrc IS INITIAL.
+        SORT lt_tq80 BY qmart.
+      ENDIF.
 
 *         user statuses
       DATA(lv_stsma) = VALUE #( lt_tq80[ qmart = ls_evm_qmel-qmart ]-stsma OPTIONAL ).
 
-      SELECT stsma,estat,txt04,txt30 FROM ZI_PPM_TJ30T  INTO  CORRESPONDING FIELDS OF TABLE @lt_tj30t"#EC CI_GENBUFF
+      SELECT stsma,estat,txt04,txt30 FROM zi_ppm_tj30t  INTO  CORRESPONDING FIELDS OF TABLE @lt_tj30t "#EC CI_GENBUFF
         WHERE stsma = @lv_stsma
           AND estat = @ls_evm_qmel-user_status
           AND spras = @sy-langu.
       IF sy-subrc IS INITIAL.
-         SORT lt_tj30t BY stsma estat.
+        SORT lt_tj30t BY stsma estat.
       ENDIF.
 
 
@@ -988,7 +989,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
           WITH KEY stsma = ls_tq80-stsma
                     estat = ls_evm_qmel-user_status BINARY SEARCH.
         IF sy-subrc = 0.
-         " ls_evm_qmel-stsma = ls_tq80-stsma.
+          " ls_evm_qmel-stsma = ls_tq80-stsma.
           "ls_evm_qmel-user_status_code = ls_tj30t-txt04.
           ls_evm_qmel-user_status_desc = ls_tj30t-txt30.
         ENDIF.
@@ -1026,9 +1027,10 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
         iv_var_reason     = ls_evm_qmel-var_reason
       IMPORTING
         r_result          = DATA(lv_varitype_trigger)
+        r_return_code     = DATA(lv_r_return_code)
         r_variatwftype    = DATA(lv_variatwftype).
 
-    IF lv_varitype_trigger = abap_true.
+    IF lv_varitype_trigger = abap_true AND lv_r_return_code = 0.
       CALL METHOD me->start_workflow
         EXPORTING
           iv_stepnumber                = '020'                 " Current Approval Step
@@ -1053,7 +1055,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
           iv_governancerole_text       = zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser
           it_variation_head            = ls_variation_head.
     ELSE.
-      MESSAGE e012(zppm_var) WITH ls_evm_qmel-qmart.
+      MESSAGE I013(zppm_var).
     ENDIF.
   ENDMETHOD.                                             "#EC CI_VALPAR
 
@@ -1777,7 +1779,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
                                   variation_type = iv_variation_type
                                   workflow_seq_var = lv_workflow_seq_var
                                   workflow_seq = lv_workflow_seq
-                                  workflow_action = iv_curr_workflow_action
+                                  workflow_action = ls_proj_roles-workflowaction
                                  " prjrole_role = ls_next_post_appr-prjrole_role
                                   "govern_role = ls_next_post_appr-des_point_govrole
                                   "position_id = ls_next_post_appr-position_id
@@ -1790,6 +1792,18 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
           ENDIF.
 *          ---------------------------------------------------------------
           TRY.
+
+             IF ls_proj_roles-workflowaction = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+              DATA(lv_workflow_action_text) = zif_ppm_variation_wf_c=>c_workflow_action_text-endorser.
+              DATA(lv_governancerole_text) = zif_ppm_variation_wf_c=>c_governance_role_action-pp_endorser.
+            ELSEIF ls_proj_roles-workflowaction = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase.
+              lv_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_phase.
+              lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-pp_approver.
+            ELSEIF  ls_proj_roles-workflowaction  = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+              lv_workflow_action_text = zif_ppm_variation_wf_c=>c_workflow_action_text-approver_invest.
+              lv_governancerole_text = zif_ppm_variation_wf_c=>c_governance_role_action-inv_approver.
+            ENDIF.
+
 *                start workflow
 *                " 1. Explicitly create an empty parameter container instance first
 
@@ -1843,11 +1857,11 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
                  EXPORTING
                    name       = zif_ppm_variation_wf_c=>gc_iv_curr_wf_status
                    value      = iv_curr_wf_status ).   "Value to be set
-              "IV_CURR_WORKFLOW_ACTION
+              "IV_CURR_WORKFLOW_ACTION -   swc_set_element ac_container 'WORKFLOW_ACTION' ls_position-workflowaction.
               lo_event_container->set(
                  EXPORTING
                    name       = zif_ppm_variation_wf_c=>gc_iv_curr_workflow_action
-                   value      = iv_curr_workflow_action ).   "Value to be set
+                   value      = ls_proj_roles-workflowaction ).   "Value to be set
               "IV_PROJECTNAME
               lo_event_container->set(
                  EXPORTING
@@ -1897,13 +1911,13 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
               lo_event_container->set(
                 EXPORTING
                   name       = zif_ppm_variation_wf_c=>gc_curr_workflow_action_text
-                  value      = iv_curr_workflow_action_text ).   "Value to be set
+                  value      = lv_workflow_action_text ).   "Value to be set
 
               "GOVERNANCEROLE_TEXT
               lo_event_container->set(
                 EXPORTING
                   name       = zif_ppm_variation_wf_c=>gc_governance_text
-                  value      = iv_governancerole_text ).   "Value to be set
+                  value      = lv_governancerole_text ).   "Value to be set
 
               "IT_VARIATION_HEAD
               lo_event_container->set(
@@ -2160,18 +2174,20 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
     IF sy-subrc IS INITIAL.
       IF lv_variatwftype = zif_ppm_variation_wf_c=>c_workflow_type-internal."Internal
         " read project role.
-
         DELETE lt_proj_roles WHERE variationsequence IS INITIAL.
         SORT lt_proj_roles BY variationsequence  ASCENDING.
         DATA(ls_proj_roles) = VALUE #( lt_proj_roles[ variationsequence = lv_workflow_seq_var ]  OPTIONAL ).
         DATA(lv_total_steps) = lines( lt_proj_roles ).
         "Maximum for internal is 3 steps based on manage workflow configuration.
-        IF lv_total_steps > 3.
-          lv_total_steps = 3.
+        IF lv_total_steps > 50.
+          lv_total_steps = 50.
         ENDIF.
 
       ELSEIF lv_variatwftype = zif_ppm_variation_wf_c=>c_workflow_type-external."External
-
+        "Maximum for internal is 6 steps based on manage workflow configuration.
+        IF lv_total_steps > 50.
+          lv_total_steps = 50.
+        ENDIF.
         DELETE lt_proj_roles WHERE workflowsequence IS INITIAL.
         SORT lt_proj_roles  BY workflowsequence ASCENDING.
         ls_proj_roles = VALUE #( lt_proj_roles[ workflowsequence  = lv_workflow_seq ]  OPTIONAL ).
@@ -2234,7 +2250,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
     IF lt_all_steps IS NOT INITIAL.
       SORT lt_all_steps BY counter DESCENDING.
       "DATA(lv_count_itemnumber) = VALUE #( lt_all_steps[ 1 ]-counter OPTIONAL ).
-     DATA(lv_count_itemnumber) = lines( lt_all_steps ).
+      DATA(lv_count_itemnumber) = lines( lt_all_steps ).
     ENDIF.
     IF lv_current_itnumber = lv_total_steps.
       DATA(lv_lastlevelapproval) = abap_true.
@@ -2250,13 +2266,18 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
         lv_lastlevelapproval = abap_false.
       ENDIF.
     ENDIF.
+    IF ls_proj_roles-workflowaction <> iv_workflow_action."lv_r_workflow_action .
+      lv_r_workflow_action  = ls_proj_roles-workflowaction .
+    ELSE.
+      lv_r_workflow_action  =  iv_workflow_action.
+    ENDIF.
 
     CALL METHOD me->setflowstatus
       EXPORTING
         iv_wfinst_main                = ls_lastitem_step-wfinst_main
         iv_variation_number           = iv_variation_number
         iv_decision_wi_result         = iv_decision_wi_result
-        iv_workflow_action            = iv_workflow_action
+        iv_workflow_action            = lv_r_workflow_action
         iv_current_step_uuid          = ls_lastitem_step-step_uuid
         iv_final_step_uuid            = ls_lastitem_step-step_uuid
         iv_lastlevelapproval          = lv_lastlevelapproval
@@ -2273,31 +2294,31 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
 
 *  ---Update decision for the current step(action step)------------------------------------
     IF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-approve.
-      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+      IF lv_r_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
         DATA(lv_status) = zif_ppm_variation_wf_c=>c_step_status-endorsed.
-      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
-        OR  iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+      ELSEIF lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR  lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-approved.
       ENDIF.
     ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-requestinformation.
-      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+      IF lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-more_info_req.
-      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
-        OR  iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+      ELSEIF lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR  lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-more_info_req.
       ENDIF.
     ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-reject.
-      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+      IF lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-rejected.
-      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
-        OR  iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+      ELSEIF lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR  lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-rejected.
       ENDIF.
     ELSEIF iv_decision_wi_result = zif_ppm_variation_wf_c=>c_decision_outcome_id-resubmit.
-      IF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
-        OR iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
+      IF lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_phase
+        OR lv_r_workflow_action  = zif_ppm_variation_wf_c=>c_workflow_action-approver_invest.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-decision_pending.
-      ELSEIF iv_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
+      ELSEIF lv_r_workflow_action = zif_ppm_variation_wf_c=>c_workflow_action-endorser.
         lv_status = zif_ppm_variation_wf_c=>c_step_status-decision_pending.
       ENDIF.
     ENDIF.
@@ -2355,7 +2376,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
        note                  = lv_decision_note
        workflow_seq_var      = lv_workflow_seq_var
        workflow_seq          = lv_workflow_seq
-       workflow_action       = iv_workflow_action
+       workflow_action       = ls_proj_roles-workflowaction
        prjrole_role          = ls_proj_roles-role
        govern_role           = ls_proj_roles-decpointgovernancerole
        position_id           = ls_proj_roles-positionid
@@ -2519,7 +2540,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
               iv_variation_number     = iv_variation_number        " Notification Number
               iv_current_step         = lv_iv_curr_step                           " Current Approval Step
               iv_ppm_id               = iv_ppm_item                 " Business Object ID
-              iv_ppm_wf_action        = iv_workflow_action            " Workflow Action
+              iv_ppm_wf_action        = lv_r_workflow_action            " Workflow Action
               iv_variation_type       = iv_variation_type           " Notification Type
               iv_wf_path              = lv_wf_path                  " Approval path
               iv_workitemid           = iv_workitemid               " Work item ID
@@ -2550,7 +2571,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
             iv_variation_number     = iv_variation_number        " Notification Number
             iv_current_step         = lv_iv_curr_step                           " Current Approval Step
             iv_ppm_id               = iv_ppm_item                 " Business Object ID
-            iv_ppm_wf_action        = iv_workflow_action            " Workflow Action
+            iv_ppm_wf_action        = lv_r_workflow_action             " Workflow Action
             iv_variation_type       = iv_variation_type           " Notification Type
             iv_wf_path              = lv_wf_path                  " Approval path
             iv_workitemid           = iv_workitemid               " Work item ID
@@ -2574,7 +2595,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
             iv_stepnumber           = iv_stepnumber              " Var WF Sequence
             iv_variation_type       = iv_variation_type              " Notification Type
 *           iv_status               =                  " 5 Character Numeric NUMC
-            iv_workflow_action      = iv_workflow_action              " Workflow Action
+            iv_workflow_action      = lv_r_workflow_action               " Workflow Action
 *           iv_govern_role          =                  " Governance Role
 *           iv_holder_summary       =                  " Long Description
 *           iv_processed_by         =                  " PEC e-Mail Address of Invoice Recipient
@@ -2599,7 +2620,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
             save_data_failed        = 1                " Save data failed
             OTHERS                  = 2.
       ENDIF.
-      IF ev_wfinst_main Is INITIAL.
+      IF ev_wfinst_main IS INITIAL.
         ev_wfinst_main  = ls_lastitem_step-wfinst_main.
       ENDIF.
     ENDIF.
@@ -2685,9 +2706,12 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
 
     ENDIF.
 *     Checking Variation cost exist
-    IF is_variationhead-estimated_costs <= 0.
-      MESSAGE e003(zppm_var) .
-    ENDIF.
+*     comment to resolve UAT DEFECT 3-38499 & 3-38503
+*     The variation workflow should allow positive/zero/negative line items
+*    IF is_variationhead-estimated_costs <= 0.
+*      MESSAGE e003(zppm_var) .
+*    ENDIF.
+*     comment to resolve UAT DEFECT 3-38499 & 3-38503#
 
     r_result = abap_true.
 
@@ -2758,6 +2782,7 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
 * | [--->] IV_VARIATION_TYPE              TYPE        QMART
 * | [--->] IV_VAR_REASON                  TYPE        /NOVECO/VAR_REASON
 * | [<---] R_VARIATWFTYPE                 TYPE        ZDE_APPRV_PATH
+* | [<---] R_RETURN_CODE                  TYPE        NUMC2
 * | [<---] R_RESULT                       TYPE        BOOLE_D
 * +--------------------------------------------------------------------------------------</SIGNATURE>
   METHOD valid_variat_type_trigger_wf.
@@ -2802,8 +2827,20 @@ CLASS ZCL_PPM_VARIATION_WF IMPLEMENTATION.
           ASSIGN COMPONENT 'VARIAT_WF_TYPE' OF STRUCTURE <fs_la_any> TO FIELD-SYMBOL(<lv_wf_type>).
           IF <lv_wf_trigger> IS ASSIGNED AND <lv_wf_trigger>  IS NOT INITIAL AND <lv_wf_type> IS ASSIGNED AND <lv_wf_type> IS NOT INITIAL.
             r_variatwftype = <lv_wf_type>.
+            "•  Workflow should only be triggered when a valid configuration exists.
+            r_return_code = 0.
             r_result = <lv_wf_trigger>.
+          ELSE.
+              IF <lv_wf_trigger> IS ASSIGNED  AND <lv_wf_type> IS ASSIGNED.
+                IF <lv_wf_trigger> = abap_false.
+                  "the workflow configuration exists and it suggests "No workflow is to be triggered"
+                  r_return_code = 1.
+                ENDIF.
+              ENDIF.
           ENDIF.
+        ELSE.
+          "•  Absence of a workflow configuration should not prevent users from progressing the Variation to Active/ Approved status.
+            r_return_code = 2.
         ENDIF.
       CATCH cx_fdt INTO lx_fdt.
     ENDTRY.
