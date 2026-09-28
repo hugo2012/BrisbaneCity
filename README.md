@@ -126,6 +126,8 @@ https://developers.sap.com/tutorials/abap-environment-sbpa-workflow-extend-rap-a
 Triggering SAP Build Process Automation Processes from SAP Cloud Application Programming (CAP) Apps
 https://community.sap.com/t5/technology-blog-posts-by-sap/triggering-sap-build-process-automation-processes-from-sap-cloud/ba-p/13954105
 
+Trigger Build Process Automation Instance from S/4 HANA On-Premise using ABAP Code
+https://community.sap.com/t5/technology-blog-posts-by-members/trigger-build-process-automation-instance-from-s-4-hana-on-premise-using/ba-p/13554779
 
 
 
