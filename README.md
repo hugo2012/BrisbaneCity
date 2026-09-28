@@ -117,8 +117,11 @@ METHOD if_swf_flex_ifs_run_appl_step~on_creation_callback.
 
   ENDMETHOD.
 
-Create and Implement the Workflow Handler Class to call sap BTP workflow instnace process
+ABAP BTP - Create and Implement the Workflow Handler Class to call sap BTP workflow instnace process
 https://developers.sap.com/tutorials/abap-environment-sbpa-workflow-handler-class
+
+Extend the RAP Travel Application to integrate workflow capability
+https://developers.sap.com/tutorials/abap-environment-sbpa-workflow-extend-rap-app
 
 
 
