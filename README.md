@@ -123,6 +123,9 @@ https://developers.sap.com/tutorials/abap-environment-sbpa-workflow-handler-clas
 Extend the RAP Travel Application to integrate workflow capability
 https://developers.sap.com/tutorials/abap-environment-sbpa-workflow-extend-rap-app
 
+Triggering SAP Build Process Automation Processes from SAP Cloud Application Programming (CAP) Apps
+https://community.sap.com/t5/technology-blog-posts-by-sap/triggering-sap-build-process-automation-processes-from-sap-cloud/ba-p/13954105
+
 
 
 
