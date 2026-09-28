@@ -129,6 +129,8 @@ https://community.sap.com/t5/technology-blog-posts-by-sap/triggering-sap-build-p
 Trigger Build Process Automation Instance from S/4 HANA On-Premise using ABAP Code
 https://community.sap.com/t5/technology-blog-posts-by-members/trigger-build-process-automation-instance-from-s-4-hana-on-premise-using/ba-p/13554779
 
+SAP Build Process Automation: Process Triggers: A Step-by-Step Demo on Invoice Validation Approval
+https://community.sap.com/t5/technology-q-a/sap-build-process-automation-process-triggers-a-step-by-step-demo-on/qaq-p/14171790
 
 
 
